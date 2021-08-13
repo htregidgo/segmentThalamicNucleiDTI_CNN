@@ -5,7 +5,7 @@ training_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_s
 # NPY file with list of labels
 path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
 # Directory where model files will be writte
-model_dir = '/cluster/scratch/friday/models/diffusion_thalamus/'
+model_dir = '/cluster/scratch/friday/models/diffusion_thalamus_test/'
 # Batch size being volumes, it will probably be always 1...
 batchsize = 1
 # Size to which inputs will be cropped (use None to use whole volume)
@@ -23,6 +23,10 @@ gamma_std = 0.1
 # Standard deviation of random contrast / brightness for intensity channels
 contrast_std = 0.1
 brightness_std = 0.1
+# Randomize resolution during training?
+randomize_resolution = True
+# Resolution of diffusion data (only needed if randomizing resolution; we use it to compute width of blurring kernels)
+diffusion_resolution = 1.25
 # Number of levels in Unet (5 is good)
 n_levels = 5
 # Number of convolution + nonlinearity blocks per level (2 is good)
@@ -42,7 +46,7 @@ lr = 1e-4
 # Decay in learning rate, if you want to schedule. I normally leave it alone (ie set it to 0)
 lr_decay = 0
 # Number of "pretraining" epochs where we use the L2 norm on the activations rather than Dice in the softmax (5-10)
-wl2_epochs = 10
+wl2_epochs = 5
 # Number of epocts with Dice
 dice_epochs = 200
 # Steps per epoch (1000 is good)
@@ -54,27 +58,29 @@ checkpoint = None
 train(training_dir,
              path_label_list,
              model_dir,
-             batchsize=1,
-             crop_size=128,
-             scaling_bounds=0.15,
-             rotation_bounds=15,
-             max_noise_std=0.1,
-             max_noise_std_fa=0.03,
-             gamma_std=0.1,
-             contrast_std=0.1,
-             brightness_std=0.1,
-             n_levels=5,
-             nb_conv_per_level=2,
-             conv_size=3,
-             unet_feat_count=24,
-             feat_multiplier=2,
-             dropout=0,
-             activation='elu',
-             lr=1e-4,
-             lr_decay=0,
-             wl2_epochs=5,
-             dice_epochs=200,
-             steps_per_epoch=1000,
-             checkpoint=None)
+             batchsize=batchsize,
+             crop_size=crop_size,
+             scaling_bounds=scaling_bounds,
+             rotation_bounds=rotation_bounds,
+             max_noise_std=max_noise_std,
+             max_noise_std_fa=max_noise_std_fa,
+             gamma_std=gamma_std,
+             contrast_std=contrast_std,
+             brightness_std=brightness_std,
+             randomize_resolution=randomize_resolution,
+             diffusion_resolution=diffusion_resolution,
+             n_levels=n_levels,
+             nb_conv_per_level=nb_conv_per_level,
+             conv_size=conv_size,
+             unet_feat_count=unet_feat_count,
+             feat_multiplier=feat_multiplier,
+             dropout=dropout,
+             activation=activation,
+             lr=lr,
+             lr_decay=lr_decay,
+             wl2_epochs=wl2_epochs,
+             dice_epochs=dice_epochs,
+             steps_per_epoch=steps_per_epoch,
+             checkpoint=checkpoint)
 
 

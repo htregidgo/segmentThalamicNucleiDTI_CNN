@@ -2,6 +2,7 @@ import glob
 import numpy as np
 from joint_diffusion_structural_seg.utils import load_volume
 from scipy.interpolate import RegularGridInterpolator as rgi
+from scipy.ndimage import gaussian_filter as gauss_filt
 
 # TODO: right now it takes 3.5 seconds on my machine... not great, not terrible
 # An alternative may be to train a fatter network, so the GPU is not the bottleneck?
@@ -15,7 +16,9 @@ def image_seg_generator(training_dir,
                         gamma_std=0.1,
                         contrast_std=0.1,
                         brightness_std=0.1,
-                        crop_size=None):
+                        crop_size=None,
+                        randomize_resolution=False,
+                        diffusion_resolution=None):
 
     # Read directory to get list of training cases
     t1_list = glob.glob(training_dir + '/*.t1.nii.gz')
@@ -23,7 +26,8 @@ def image_seg_generator(training_dir,
     print('Found %d cases for training' % n_training)
 
     # Get size from first volume
-    aux = load_volume(t1_list[0])
+    aux, aff, _ = load_volume(t1_list[0], im_only=False)
+    t1_resolution = np.sum(aff,axis=0)[:-1]
     nx = aux.shape[0]
     ny = aux.shape[1]
     nz = aux.shape[2]
@@ -144,7 +148,77 @@ def image_seg_generator(training_dir,
                 for col in range(3):
                     v1_def_rot[:, :, :, row] = v1_def_rot[:, :, :, row] + Rinv[row, col] * v1_def[:, :, :, col]
 
-            # Augment t1 and fa, and compute final DTI (RGB) volume with new FA
+            # TODO: randomization of resolution increases running time by 0.5 seconds, which is not terrible...
+            if randomize_resolution:
+                # Random resolution for diffusion: between ~ 1 and 3 mm in each axis (but not too far from each other)
+                aux = 1 + 2 * np.random.rand(1)
+                batch_resolution_diffusion = aux + 0.2 * np.random.randn(3)
+                batch_resolution_diffusion[batch_resolution_diffusion < 1] = 1 # let's be realistic :-)
+
+                # Random resolution for t1: between 0.7 and 1.3 mm in each axis (but not too far from each other)
+                aux = 0.7 + 0.6 * np.random.rand(1)
+                batch_resolution_t1 = aux + 0.05 * np.random.randn(3)
+                batch_resolution_t1[batch_resolution_diffusion < 0.6] = 0.6 # let's be realistic :-)
+
+                # The theoretical blurring sigma to blur the resolution depends on the fraction by which we want to
+                # divide the power at the cutoff frequency. I use [3, 20] which translates into multiplying the ratio
+                # of resolutions by [0.35,0.95]
+                fraction = 0.35 + 0.6 * np.random.rand(1)
+
+                ratio_t1 = batch_resolution_t1 / t1_resolution
+                ratio_t1[ratio_t1 < 1] = 1
+                sigmas_t1 = fraction * ratio_t1
+                sigmas_t1[ratio_t1 == 1] = 0 # Don't blur if we're not really going down in resolution
+
+                ratio_diffusion = batch_resolution_diffusion / diffusion_resolution
+                ratio_diffusion[ratio_diffusion < 1] = 1
+                sigmas_diffusion = fraction * ratio_diffusion
+                sigmas_diffusion[ratio_diffusion == 1] = 0 # Don't blur if we're not really going down in resolution
+
+                # Low-pass filtering to blur data! There's a bunch of ways of dealing with the diffusion.
+                # 1. Blurring only the FA
+                # 2. Building the RGB and blurring. Then extract the FA+V1 again. I think this is a bit cleaner?
+                # I'll do 1 since it's faster...
+                t1_def = gauss_filt(t1_def, sigmas_t1, truncate=3.0)
+                mode = 1
+                fa_def = gauss_filt(fa_def, sigmas_diffusion, truncate=3.0)
+
+                # Subsample: will require resampling / interpolating (sigh)
+                xi = np.arange(0.5 * (ratio_t1[0] - 1.0), crop_size[0] - 1 + 1e-6, ratio_t1[0])
+                yi = np.arange(0.5 * (ratio_t1[1] - 1.0), crop_size[1] - 1 + 1e-6, ratio_t1[1])
+                zi = np.arange(0.5 * (ratio_t1[2] - 1.0), crop_size[2] - 1 + 1e-6, ratio_t1[2])
+                xig, yig, zig = np.meshgrid(xi, yi, zi, indexing='ij', sparse=True)
+                t1_downsample_interpolator = rgi((range(crop_size[0]), range(crop_size[1]), range(crop_size[2])), t1_def, method='linear')
+                t1_def = t1_downsample_interpolator((xig, yig, zig))
+
+                xi = np.arange(0.5 * (ratio_diffusion[0] - 1.0), crop_size[0] - 1 + 1e-6, ratio_diffusion[0])
+                yi = np.arange(0.5 * (ratio_diffusion[1] - 1.0), crop_size[1] - 1 + 1e-6, ratio_diffusion[1])
+                zi = np.arange(0.5 * (ratio_diffusion[2] - 1.0), crop_size[2] - 1 + 1e-6, ratio_diffusion[2])
+                xig, yig, zig = np.meshgrid(xi, yi, zi, indexing='ij', sparse=True)
+                fa_downsample_interpolator = rgi((range(crop_size[0]), range(crop_size[1]), range(crop_size[2])), fa_def, method='linear')
+                fa_def = fa_downsample_interpolator((xig, yig, zig))
+
+                # Careful now:  nearest neighbor interpolation
+                # Slow version with interpolators, which I now avoid
+                # v1_def_rot_downsampled = np.zeros([*fa_def.shape, 3])
+                # for c in range(3):
+                #     v1_downsample_interpolator = rgi((range(crop_size[0]), range(crop_size[1]), range(crop_size[2])),
+                #                                      v1_def_rot[:,:,:,c], method='nearest')
+                #     v1_def_rot_downsampled[:,:,:,c] = v1_downsample_interpolator((xig, yig, zig))
+                # v1_def_rot = v1_def_rot_downsampled
+
+                xig = np.round(xig).astype(int)
+                yig = np.round(yig).astype(int)
+                zig = np.round(zig).astype(int)
+                idx = xig + crop_size[0] * yig + crop_size[0] * crop_size[1] * zig
+                v1_def_rot_downsampled = np.zeros([*fa_def.shape, 3])
+                for c in range(3):
+                    v1_def_rot_downsampled[:,:,:,c] = v1_def_rot[:, :, :, c].flatten(order='F')[idx]
+                v1_def_rot = v1_def_rot_downsampled
+
+
+            # Augment intensities t1 and fa, and compute  DTI (RGB) volume with new FA
+            # Note that if you are downsampling, augmentation happens here at low resolution (as will happen at test time)
             gamma_fa = np.exp(gamma_std * np.random.randn(1)[0])
             noise_std = max_noise_std_fa * np.random.rand(1)[0]
             fa_def = fa_def + noise_std * np.random.randn(*fa_def.shape)
@@ -162,6 +236,84 @@ def image_seg_generator(training_dir,
             t1_def[t1_def < 0] = 0
             t1_def[t1_def > 1] = 1
             t1_def = t1_def ** gamma_t1
+
+            # Bring back to original resolution if needed
+            if randomize_resolution:
+                # TODO: it's crucial to upsample the same way as we do when predicting...
+                # TODO: move into a function...
+
+                # First the T1
+                start = (1.0 - ratio_t1[0]) / (2.0 * ratio_t1[0])
+                inc = 1.0 / ratio_t1[0]
+                end = start + inc * crop_size[0] - 1e-6
+                xi = np.arange(start, end, inc)
+                xi[xi<0] = 0
+                xi[xi>t1_def.shape[0]-1] = t1_def.shape[0]-1
+
+                start = (1.0 - ratio_t1[1]) / (2.0 * ratio_t1[1])
+                inc = 1.0 / ratio_t1[1]
+                end = start + inc * crop_size[1] - 1e-6
+                yi = np.arange(start, end, inc)
+                yi[yi < 0] = 0
+                yi[yi > t1_def.shape[1] - 1] = t1_def.shape[1] - 1
+
+                start = (1.0 - ratio_t1[2]) / (2.0 * ratio_t1[2])
+                inc = 1.0 / ratio_t1[2]
+                end = start + inc * crop_size[2] - 1e-6
+                zi = np.arange(start, end, inc)
+                zi[zi < 0] = 0
+                zi[zi > t1_def.shape[2] - 1] = t1_def.shape[2] - 1
+
+                xig, yig, zig = np.meshgrid(xi, yi, zi, indexing='ij', sparse=True)
+                t1_upsample_interpolator = rgi((range(t1_def.shape[0]), range(t1_def.shape[1]), range(t1_def.shape[2])), t1_def, method='linear')
+                t1_def = t1_upsample_interpolator((xig, yig, zig))
+
+                # Now the diffusion
+                start = (1.0 - ratio_diffusion[0]) / (2.0 * ratio_diffusion[0])
+                inc = 1.0 / ratio_diffusion[0]
+                end = start + inc * crop_size[0] - 1e-6
+                xi = np.arange(start, end, inc)
+                xi[xi < 0] = 0
+                xi[xi > fa_def.shape[0] - 1] = fa_def.shape[0] - 1
+
+                start = (1.0 - ratio_diffusion[1]) / (2.0 * ratio_diffusion[1])
+                inc = 1.0 / ratio_diffusion[1]
+                end = start + inc * crop_size[1] - 1e-6
+                yi = np.arange(start, end, inc)
+                yi[yi < 0] = 0
+                yi[yi > fa_def.shape[1] - 1] = fa_def.shape[1] - 1
+
+                start = (1.0 - ratio_diffusion[2]) / (2.0 * ratio_diffusion[2])
+                inc = 1.0 / ratio_diffusion[2]
+                end = start + inc * crop_size[2] - 1e-6
+                zi = np.arange(start, end, inc)
+                zi[zi < 0] = 0
+                zi[zi > fa_def.shape[2] - 1] = fa_def.shape[2] - 1
+
+                xig, yig, zig = np.meshgrid(xi, yi, zi, indexing='ij', sparse=True)
+                fa_upsample_interpolator = rgi((range(fa_def.shape[0]), range(fa_def.shape[1]), range(fa_def.shape[2])),
+                                               fa_def, method='linear')
+                fa_def = fa_upsample_interpolator((xig, yig, zig))
+
+                # again, careful with the eigenvectors...
+                # Once more, I replace the interpolatros by my own code...
+                # v1_def_rot_upsampled = np.zeros([*fa_def.shape, 3])
+                # for c in range(3):
+                #     v1_upsample_interpolator = rgi((range(v1_def_rot.shape[0]), range(v1_def_rot.shape[1]), range(v1_def_rot.shape[2])),
+                #                                v1_def_rot[:,:,:,c], method='nearest')
+                #     v1_def_rot_upsampled[:,:,:,c] = v1_upsample_interpolator((xig, yig, zig))
+                # v1_def_rot = v1_def_rot_upsampled
+
+                xig = np.round(xig).astype(int)
+                yig = np.round(yig).astype(int)
+                zig = np.round(zig).astype(int)
+                idx = xig + v1_def_rot.shape[0] * yig + v1_def_rot.shape[0] * v1_def_rot.shape[1] * zig
+                v1_def_rot_upsampled = np.zeros([*fa_def.shape, 3])
+                for c in range(3):
+                    v1_def_rot_upsampled[:,:,:,c] = v1_def_rot[:, :, :, c].flatten(order='F')[idx]
+                v1_def_rot = v1_def_rot_upsampled
+
+                dti_def = np.abs(v1_def_rot * fa_def[..., np.newaxis])
 
 
             # TODO: possible improvement: introduce left right flipping. You need to a) flip all the volumes, b) swap
@@ -191,7 +343,7 @@ def image_seg_generator(training_dir,
             # save_volume(dti_def * 255, aff, None, '/tmp/dti_def.mgz')
             # save_volume(onehot, aff, None, '/tmp/onehot_def.mgz')
 
-            list_images.append(np.concatenate((t1_def[..., np.newaxis], fa_def[..., np.newaxis], dti_def ), axis=-1)[np.newaxis,...])
+            list_images.append(np.concatenate((t1_def[..., np.newaxis], fa_def[..., np.newaxis], dti_def), axis=-1)[np.newaxis,...])
             list_label_maps.append(onehot[np.newaxis,...])
 
         # build list of inputs of augmentation model

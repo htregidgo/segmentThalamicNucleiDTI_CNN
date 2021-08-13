@@ -49,6 +49,9 @@ aff_ref = np.eye(4)
 t1, aff, _ = utils.load_volume(t1_file, im_only=False)
 t1, aff2 = utils.align_volume_to_ref(t1, aff, aff_ref=aff_ref, return_aff=True, n_dims=3)
 
+# TODO: add option to upsample T1 to resolution of model, which we will need when processing data of lower resolutio
+# (e.g., GENFI). Then all other volumes will get resample to this space too when calling resample_like
+
 # Read and resample all the other volumes
 aseg, aff, _ = utils.load_volume(aseg_file, im_only=False)
 aseg = utils.resample_like(t1, aff2, aseg, aff, method='nearest')
