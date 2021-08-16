@@ -231,7 +231,7 @@ def image_seg_generator(training_dir,
 
 
 # This is a second attempt, working linearly on RGB space, which reduces the "Lego blocks" created by nearest neighbor interpolation
-# Takes a bit over 5 seconds on my machine... definitely not great, but still usable
+# An iteration with this generator takes about 7 seconds on my machine... definitely not great, but still usable
 def image_seg_generator_rgb(training_dir,
                             path_label_list,
                             batchsize=1,
