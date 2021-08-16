@@ -41,7 +41,7 @@ def train(training_dir,
         'either wl2_epochs or dice_epochs must be positive, had {0} and {1}'.format(wl2_epochs, dice_epochs)
     # check generator mode
     assert (generator_mode == 'fa_v1') | (generator_mode == 'rgb'), \
-        'either wl2_epochs or dice_epochs must be positive, had {0} and {1}'.format(wl2_epochs, dice_epochs)
+        'generator mode must be fa_v1 or rgb'
 
     if diffusion_resolution is not None:
         if type(diffusion_resolution) == int:

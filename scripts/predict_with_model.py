@@ -19,8 +19,9 @@ from joint_diffusion_structural_seg import models
 subject = 'subject_996782'
 fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/HCPlinked/'
 path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
-model_file = '/cluster/scratch/friday/models/diffusion_thalamus/dice_041.h5'
+model_file = '/cluster/scratch/friday/models/diffusion_thalamus/dice_128.h5'
 resolution_model_file = 0.7
+generator_mode = 'rgb' # rgb or Must be the same as in training
 output_seg_file = '/tmp/seg.mgz'
 output_vol_file = '/tmp/vols.npy'
 
@@ -35,6 +36,9 @@ nb_conv_per_level = 2
 activation = 'elu'
 
 ##########################################################################################
+
+assert (generator_mode == 'fa_v1') | (generator_mode == 'rgb'), \
+    'generator mode must be fa_v1 or rgb'
 
 # Area around the thalamus that we feed to CNN
 W = 128
@@ -61,16 +65,25 @@ if any(abs(np.diag(aff2)[:-1] - resolution_model_file) > 0.1):
 # Read and resample all the other volumes
 aseg, aff, _ = utils.load_volume(aseg_file, im_only=False)
 aseg = utils.resample_like(t1, aff2, aseg, aff, method='nearest')
-fa, aff, _ = utils.load_volume(fa_file, im_only=False)
-fa = utils.resample_like(t1, aff2, fa, aff)
-v1, aff, _ = utils.load_volume(v1_file, im_only=False)
+
 # TODO: we'll want to do this in the log-tensor domain
-# but for now I simply interpolate with nearest neighbors
-v1_copy = v1.copy()
-v1 = np.zeros([*t1.shape, 3])
-v1[:, :, :, 0] = - utils.resample_like(t1, aff2, v1_copy[:, :, :, 0], aff, method='nearest') # minus as in generators.py
-v1[:, :, :, 1] = utils.resample_like(t1, aff2, v1_copy[:, :, :, 1], aff, method='nearest')
-v1[:, :, :, 2] = utils.resample_like(t1, aff2, v1_copy[:, :, :, 2], aff, method='nearest')
+if generator_mode=='fa_v1':
+    fa, aff, _ = utils.load_volume(fa_file, im_only=False)
+    fa = utils.resample_like(t1, aff2, fa, aff)
+    v1, aff, _ = utils.load_volume(v1_file, im_only=False)
+    v1_copy = v1.copy()
+    v1 = np.zeros([*t1.shape, 3])
+    v1[:, :, :, 0] = - utils.resample_like(t1, aff2, v1_copy[:, :, :, 0], aff, method='nearest') # minus as in generators.py
+    v1[:, :, :, 1] = utils.resample_like(t1, aff2, v1_copy[:, :, :, 1], aff, method='nearest')
+    v1[:, :, :, 2] = utils.resample_like(t1, aff2, v1_copy[:, :, :, 2], aff, method='nearest')
+    dti = np.abs(v1 * fa[..., np.newaxis])
+else:
+    fa, aff, _ = utils.load_volume(fa_file, im_only=False)
+    v1 = utils.load_volume(v1_file, im_only=True)
+    dti = np.abs(v1 * fa[..., np.newaxis])
+    fa = utils.resample_like(t1, aff2, fa, aff)
+    dti = utils.resample_like(t1, aff2, dti, aff)
+
 
 # Normalize the T1
 wm_mask = (aseg == 2) | (aseg == 41)
@@ -91,13 +104,12 @@ k2 = k1 + W
 
 t1 = t1[i1:i2, j1:j2, k1:k2]
 fa = fa[i1:i2, j1:j2, k1:k2]
-v1 = v1[i1:i2, j1:j2, k1:k2, :]
+dti = dti[i1:i2, j1:j2, k1:k2, :]
 
 # Let's be picky and preserve the RAS coordinates
 aff2[:-1, -1] = aff2[:-1, -1] + np.matmul(aff2[:-1, :-1], np.array([i1, j1, k1]))
 
 # Put toghether the 5D input
-dti = np.abs(v1 * fa[..., np.newaxis])
 input = np.concatenate((t1[..., np.newaxis], fa[..., np.newaxis], dti ), axis=-1)[np.newaxis,...]
 
 # Load label list

@@ -5,7 +5,7 @@ training_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_s
 # NPY file with list of labels
 path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
 # Directory where model files will be writte
-model_dir = '/cluster/scratch/friday/models/diffusion_thalamus_test/'
+model_dir = '/cluster/scratch/friday/models/diffusion_thalamus_test_random_resolution/'
 # Batch size being volumes, it will probably be always 1...
 batchsize = 1
 # Size to which inputs will be cropped (use None to use whole volume)

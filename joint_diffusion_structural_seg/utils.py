@@ -267,7 +267,10 @@ def resample_like(vol_ref, aff_ref, vol_flo, aff_flo, method='linear'):
     coords_new = np.matmul(T, coords)[:-1, :]
     result = my_interpolating_function((coords_new[0, :], coords_new[1, :], coords_new[2, :]))
 
-    return result.reshape(vol_ref.shape)
+    if vol_ref.size == result.size:
+        return result.reshape(vol_ref.shape)
+    else:
+        return result.reshape([*vol_ref.shape, vol_flo.shape[-1]])
 
 
 
