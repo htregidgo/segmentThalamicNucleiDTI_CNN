@@ -38,7 +38,7 @@ def cook_data():
     print("unwrapping and moving topup dwi files...")
     dipy_routines.import_convert_save_dwi(path_list,case_list,data_header_dir, data_name,
     bval_name, bvec_name, mask_name, rm_b0=False, cook_ODF=False,cook_FA=True,cook_Kurt=False,
-    cook_b0=True,b_mask=False,saveslice=55)
+    cook_b0=True,b_mask=True,saveslice=55)
     print("shutting down")
 
 ###################################################################

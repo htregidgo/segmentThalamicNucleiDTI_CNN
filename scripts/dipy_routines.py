@@ -62,13 +62,13 @@ cook_FA=True,cook_Kurt=True,cook_b0=True,b_mask=False,saveslice=None):
         fdwi = path + data_name
         data, affine = load_nifti(fdwi, return_img=False)
 
-        if saveslice is not None:
-            data = data[saveslice,:,:,:]
-
         if b_mask:
             brain_mask, affine_b = load_nifti(path + mask_name,return_img=False)
         else:
             brain_mask = np.ones_like(data[:,:,:,0])
+
+        if saveslice is not None: # if you only want to try one slice
+            data = data[saveslice,:,:,:]
         ## load in bvec and bval
         fbval = path + bval_name
         fbvec = path + bvec_name
