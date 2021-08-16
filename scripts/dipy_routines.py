@@ -69,6 +69,7 @@ cook_FA=True,cook_Kurt=True,cook_b0=True,b_mask=False,saveslice=None):
 
         if saveslice is not None: # if you only want to try one slice
             data = data[saveslice,:,:,:]
+            brain_mask = brain_mask[saveslice,:,:]
         ## load in bvec and bval
         fbval = path + bval_name
         fbvec = path + bvec_name
@@ -83,9 +84,15 @@ cook_FA=True,cook_Kurt=True,cook_b0=True,b_mask=False,saveslice=None):
         if cook_b0:
             print("saving b0 volume...")
             if b_mask:
-                data_b0 = ma.masked_array(data[:,:,:,0], mask=brain_mask)
+                if saveslice is not None:
+                    data_b0 = ma.masked_array(data[:,:,0], mask=brain_mask)
+                else:
+                    data_b0 = ma.masked_array(data[:,:,:,0], mask=brain_mask)
             else:
-                data_b0 = data[:,:,:,0]
+                if saveslice is not None:
+                    data_b0 = data[:,:,0]
+                else:
+                    data_b0 = data[:,:,:,0]
             save_nifti(savepath+'b0.nii.gz', data_b0.astype(np.float32), affine)
 
         if cook_ODF: # wether you want to extract an ODF or not
