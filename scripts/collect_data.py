@@ -12,8 +12,49 @@ from distutils.util import strtobool
 # TODO: clean up .h5 parsing and automate
 # TODO: move all dipy stuff to dipy_routines.py
 
+#############################################################################
+############################# MAIN ##########################################
+def cook_data():
+    # assuming that header path already exists
+    # initialize all paths and names
+    data_header_dir = "/Users/markolchanyi/Desktop/Edlow_Brown/Medulla_Project/Pons_Midbrain_training_set/"
+
+    if not os.path.exists(data_header_dir): # wrong training folder
+        raise FileNotFoundError
+
+    inner_path = "/"
+    data_name = "data.nii.gz"
+    mask_name = "brain_mask.nii.gz"
+    bval_name = "bvals.txt"
+    bvec_name = "bvecs.txt"
+    ################################################################
+    ### curate cases (make sure to parse each case in case_list) ###
+    print("setting cooker paths...")
+    case_list = ["test"]
+    path_list = [data_header_dir + e + inner_path for e in case_list]
+    assert len(case_list) == 0, "no cases!" # redundant
+
+    print("unwrapping and moving topup dwi files...")
+    dipy_routines.import_convert_save_dwi(path_list,case_list,data_header_dir, data_name,
+    bval_name, bvec_name, mask_name, rm_b0=False, cook_ODF=False,cook_FA=True,cook_Kurt=False,
+    cook_b0=True,b_mask=False,saveslice=55)
+    print("shutting down")
+
+###################################################################
+###################################################################
+
+
+
 def collect_all_data():
-    data_header_dir = "training_data/"
+
+    # initialize all paths
+    data_header_dir = "/Users/markolchanyi/Desktop/Edlow_Brown/Medulla_Project/Pons_Midbrain_training_set/"
+    inner_path = "/"
+    ### curate cases ###
+    case_names = ["test"]
+    filename = [data_header_dir + e + inner_path for e in case_names]
+
+
     if not os.path.exists(data_header_dir):
         merge_data(data_header_dir)
     assert len(os.listdir(data_header_dir)) == 0, "no cases in the training folder"
@@ -35,21 +76,6 @@ def collect_all_data():
             merge_data(data_header_dir)
 
     print("done collecting data...")
-
-
-def topup_data():
-    # assuming that header path already exists
-    data_header_dir = "HCP_training_data/"
-    if not os.path.exists(data_header_dir):
-        raise FileNotFoundError
-
-    print("setting topup paths...")
-    path_list, case_list = set_dwi_paths()
-    assert len(case_list) == 0, "no cases!"
-
-    print("unwrapping and moving topup dwi files...")
-    dipy_routines.import_convert_save_dwi(path_list,case_list,data_header_dir,rm_b0=False)
-    print("shutting down")
 
 
 
@@ -78,16 +104,7 @@ def confirm_change(question):
 def set_dwi_paths(is_training=False):
     base_path = "HCP_training_data/"
     inner_path = "/"
-    case_names = ["mgh_1001","mgh_1002","mgh_1003"]
-    #"mgh_1007","mgh_1008","mgh_1009","mgh_1010","mgh_1011","mgh_1012",
-    #"mgh_1013","mgh_1014","mgh_1015","mgh_1016","mgh_1017","mgh_1018",
-    #"mgh_1019","mgh_1020","mgh_1021","mgh_1022","mgh_1023","mgh_1024",
-    #"mgh_1025","mgh_1026","mgh_1027","mgh_1028","mgh_1029","mgh_1030",
-    #"mgh_1031","mgh_1032","mgh_1033","mgh_1034"]
-    #case_names = ["w001","w002","w003","w004","w005","w006"]
-    #case_names = ["w001","w002","w003","w004","w005","w006","w007","w008","w009","w010","w011","w012",
-    #"w013","w014","w015","w016","w017","w018","w019","w020"]
-    #case_names = ["w021","w022"]
+    case_names = ["mgh_1001","mgh_1002","mgh_1003"] # change this 
     print("extracting ",len(case_names), " cases ")
 
     if is_training:
@@ -228,3 +245,9 @@ def readhd5(path_raw,path_predict,output_raw,output_predict):
 
     save_nifti(output_predict, data_prediction[0,:,:,:].astype(np.float32), affine=np.eye(4))
     save_nifti(output_raw, data_raw[0,:,:,:].astype(np.float32), affine=np.eye(4))
+
+
+
+
+if __name__ == "__main__":
+    cook_data()

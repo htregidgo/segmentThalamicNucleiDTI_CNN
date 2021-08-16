@@ -52,18 +52,26 @@ def fit_odf(data_roi,gtab):
     return odf, sphere
 
 
-def import_convert_save_dwi(pathlist,case_list,header,rm_b0,cook_ODF=False,cook_FA=True,cook_Kurt=True,cook_b0=True,b_mask=False):
+
+def import_convert_save_dwi(pathlist,case_list,header,data_name,
+bval_name, bvec_name, mask_name,rm_b0=False,cook_ODF=False,
+cook_FA=True,cook_Kurt=True,cook_b0=True,b_mask=False,saveslice=None):
+
     for path,case in zip(pathlist,case_list):
         print("beginning %s ..." %case)
-        fdwi = path + "diff_preproc.nii.gz"
+        fdwi = path + data_name
         data, affine = load_nifti(fdwi, return_img=False)
+
+        if saveslice is not None:
+            data = data[saveslice,:,:,:]
+
         if b_mask:
-            brain_mask, affine_b = load_nifti(path + "nodif_brain_mask.nii.gz",return_img=False)
+            brain_mask, affine_b = load_nifti(path + mask_name,return_img=False)
         else:
             brain_mask = np.ones_like(data[:,:,:,0])
         ## load in bvec and bval
-        fbval = path + "bvals.txt"
-        fbvec = path + "bvecs_moco_norm.txt"
+        fbval = path + bval_name
+        fbvec = path + bvec_name
         bvals, bvecs = read_bvals_bvecs(fbval, fbvec)
         gtab = gradient_table(bvals, bvecs)
         # save everything to bin files
@@ -119,16 +127,28 @@ def convert_nifti_masks(pathlist,case_list,header):
         np.save(savepath+"pons_mask", data, allow_pickle=False, fix_imports=True)
 
 
+
+
+
 def extract_MD_FA(data,affine,gtab,savepath,brain_mask,save_cfa=False):
     tenmodel = dti.TensorModel(gtab)
     tenfit = tenmodel.fit(data)
+
     print('Computing anisotropy measures (FA, MD, RGB)')
     FA = fractional_anisotropy(tenfit.evals)
+    GA = geodesic_anisotropy(tenfit.evals)
     MD = mean_diffusivity(tenfit.evals)
+    RD = radial_diffusivity(tenfit.evals)
 
     FA = np.clip(FA, 0, 1)
+    FA[np.isnan(FA)] = 0
+    GA[np.isnan(GA)] = 0
+    MD[np.isnan(MD)] = 0
+    RD[np.isnan(RD)] = 0
+
     if save_cfa:
         CFA = color_fa(FA, tenfit.evecs)
+        CFA[np.isnan(CFA)] = 0
         cfa_mask = np.repeat(arr[...,None],3,axis=3) #repeat mask into 4th channel dim
         print("dimensions of CFA image are: ", CFA.shape)
 
@@ -137,9 +157,15 @@ def extract_MD_FA(data,affine,gtab,savepath,brain_mask,save_cfa=False):
     print("saving FA images...")
     save_nifti(savepath+'fa.nii.gz', ma.masked_array(FA, mask=brain_mask).astype(np.float32), affine)
     save_nifti(savepath+'md.nii.gz', ma.masked_array(MD, mask=brain_mask).astype(np.float32), affine)
+    save_nifti(savepath+'ga.nii.gz', ma.masked_array(GA, mask=brain_mask).astype(np.float32), affine)
+    save_nifti(savepath+'rd.nii.gz', ma.masked_array(RD, mask=brain_mask).astype(np.float32), affine)
+
     if save_cfa:
         save_nifti(savepath+'cfa.nii.gz', ma.masked_array(CFA, mask=brain_mask).astype(np.float32), affine)
     print("done saving FA images")
+
+
+
 
 def extract_Kurtosis(data,affine,gtab,savepath,brain_mask,save_cfa=False):
     dkimodel = dki.DiffusionKurtosisModel(gtab)
