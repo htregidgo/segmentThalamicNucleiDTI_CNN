@@ -20,6 +20,7 @@ subject = 'subject_996782'
 fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/HCPlinked/'
 path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
 model_file = '/cluster/scratch/friday/models/diffusion_thalamus/dice_041.h5'
+resolution_model_file = 0.7
 output_seg_file = '/tmp/seg.mgz'
 output_vol_file = '/tmp/vols.npy'
 
@@ -48,6 +49,11 @@ v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_V1.nii.gz
 aff_ref = np.eye(4)
 t1, aff, _ = utils.load_volume(t1_file, im_only=False)
 t1, aff2 = utils.align_volume_to_ref(t1, aff, aff_ref=aff_ref, return_aff=True, n_dims=3)
+
+# If the resolution is not the one the model expected, we need to upsample!
+if any(abs(np.diag(aff2)[:-1] - resolution_model_file) > 0.1):
+    print('Warning: t1 does not have the resolution that the CNN expects; we need to resample')
+    t1, aff2 = utils.rescale_voxel_size(t1, aff2, [resolution_model_file, resolution_model_file, resolution_model_file])
 
 # TODO: add option to upsample T1 to resolution of model, which we will need when processing data of lower resolutio
 # (e.g., GENFI). Then all other volumes will get resample to this space too when calling resample_like
