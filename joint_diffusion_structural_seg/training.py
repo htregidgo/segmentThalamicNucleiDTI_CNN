@@ -2,7 +2,7 @@ import os
 import numpy as np
 import keras.callbacks as KC
 from keras.optimizers import Adam
-from joint_diffusion_structural_seg.generators import image_seg_generator
+from joint_diffusion_structural_seg.generators import image_seg_generator, image_seg_generator_rgb
 from joint_diffusion_structural_seg import models
 from joint_diffusion_structural_seg import metrics
 
@@ -20,6 +20,7 @@ def train(training_dir,
              contrast_std=0.1,
              brightness_std=0.1,
              randomize_resolution=False,
+             generator_mode='rgb',
              diffusion_resolution=None,
              n_levels=5,
              nb_conv_per_level=2,
@@ -38,24 +39,42 @@ def train(training_dir,
     # check epochs
     assert (wl2_epochs > 0) | (dice_epochs > 0), \
         'either wl2_epochs or dice_epochs must be positive, had {0} and {1}'.format(wl2_epochs, dice_epochs)
+    # check generator mode
+    assert (generator_mode == 'fa_v1') | (generator_mode == 'rgb'), \
+        'either wl2_epochs or dice_epochs must be positive, had {0} and {1}'.format(wl2_epochs, dice_epochs)
 
     if diffusion_resolution is not None:
         if type(diffusion_resolution) == int:
             diffusion_resolution = [diffusion_resolution] * 3
 
-    generator = image_seg_generator(training_dir,
-                            path_label_list,
-                            batchsize=batchsize,
-                            scaling_bounds=scaling_bounds,
-                            rotation_bounds=rotation_bounds,
-                            max_noise_std=max_noise_std,
-                            max_noise_std_fa=max_noise_std_fa,
-                            gamma_std=gamma_std,
-                            contrast_std=contrast_std,
-                            brightness_std=brightness_std,
-                            crop_size=crop_size,
-                            randomize_resolution=randomize_resolution,
-                            diffusion_resolution=diffusion_resolution)
+    if generator_mode == 'rgb':
+        generator = image_seg_generator_rgb(training_dir,
+                                path_label_list,
+                                batchsize=batchsize,
+                                scaling_bounds=scaling_bounds,
+                                rotation_bounds=rotation_bounds,
+                                max_noise_std=max_noise_std,
+                                max_noise_std_fa=max_noise_std_fa,
+                                gamma_std=gamma_std,
+                                contrast_std=contrast_std,
+                                brightness_std=brightness_std,
+                                crop_size=crop_size,
+                                randomize_resolution=randomize_resolution,
+                                diffusion_resolution=diffusion_resolution)
+    else:
+        generator = image_seg_generator(training_dir,
+                                path_label_list,
+                                batchsize=batchsize,
+                                scaling_bounds=scaling_bounds,
+                                rotation_bounds=rotation_bounds,
+                                max_noise_std=max_noise_std,
+                                max_noise_std_fa=max_noise_std_fa,
+                                gamma_std=gamma_std,
+                                contrast_std=contrast_std,
+                                brightness_std=brightness_std,
+                                crop_size=crop_size,
+                                randomize_resolution=randomize_resolution,
+                                diffusion_resolution=diffusion_resolution)
 
     label_list = np.sort(np.load(path_label_list)).astype(int)
     n_labels = np.size(label_list)

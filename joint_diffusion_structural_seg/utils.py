@@ -267,3 +267,102 @@ def resample_like(vol_ref, aff_ref, vol_flo, aff_flo, method='linear'):
     result = my_interpolating_function((coords_new[0, :], coords_new[1, :], coords_new[2, :]))
 
     return result.reshape(vol_ref.shape)
+
+
+
+# Creates a 3x3 rotation matrix from a vector with 3 rotations about x, y, and z
+def make_rotation_matrix(rot):
+    Rx = np.array([[1, 0, 0], [0, np.cos(rot[0]), -np.sin(rot[0])], [0, np.sin(rot[0]), np.cos(rot[0])]])
+    Ry = np.array([[np.cos(rot[1]), 0, np.sin(rot[1])], [0, 1, 0], [-np.sin(rot[1]), 0, np.cos(rot[1])]])
+    Rz = np.array([[np.cos(rot[2]), -np.sin(rot[2]), 0], [np.sin(rot[2]), np.cos(rot[2]), 0], [0, 0, 1]])
+    R = np.matmul(np.matmul(Rx, Ry), Rz)
+    return R
+
+# Computer linear (flattened) indices for linear interpolation of a volume of size nx x ny x nz at locations xx, yy, zz
+# (as well as a boolean vector 'ok' telling which indices are inbounds)
+# Note that it doesn't support sparse xx, yy, zz
+def nn_interpolator_indices(xx, yy, zz, nx, ny, nz):
+    xx2r = np.round(xx).astype(int)
+    yy2r = np.round(yy).astype(int)
+    zz2r = np.round(zz).astype(int)
+    ok = (xx2r >= 0) & (yy2r >= 0) & (zz2r >= 0) & (xx2r <= nx - 1) & (yy2r <= ny - 1) & (zz2r <= nz - 1)
+    idx = xx2r[ok] + nx * yy2r[ok] + nx * ny * zz2r[ok]
+    return idx, ok
+
+# Similar to nn_interpolator_indices but does not check out of bounds.
+# Note that it *does* support sparse xx, yy, zz
+def nn_interpolator_indices_nocheck(xx, yy, zz, nx, ny, nz):
+    xx2r = np.round(xx).astype(int)
+    yy2r = np.round(yy).astype(int)
+    zz2r = np.round(zz).astype(int)
+    idx = xx2r + nx * yy2r + nx * ny * zz2r
+    return idx
+
+# Subsamples a volume by a given ration in each dimension.
+# It carefully accounts for origin shifts
+def subsample(X, ratio, size, method='linear', return_locations=False):
+    xi = np.arange(0.5 * (ratio[0] - 1.0), size[0] - 1 + 1e-6, ratio[0])
+    yi = np.arange(0.5 * (ratio[1] - 1.0), size[1] - 1 + 1e-6, ratio[1])
+    zi = np.arange(0.5 * (ratio[2] - 1.0), size[2] - 1 + 1e-6, ratio[2])
+    xig, yig, zig = np.meshgrid(xi, yi, zi, indexing='ij', sparse=True)
+    interpolator = rgi((range(size[0]), range(size[1]), range(size[2])), X, method=method)
+    Y = interpolator((xig, yig, zig))
+    if return_locations:
+        return Y, xig, yig, zig
+    else:
+        return Y
+
+
+def upsample(X, ratio, size, method='linear', return_locations=False):
+    start = (1.0 - ratio[0]) / (2.0 * ratio[0])
+    inc = 1.0 / ratio[0]
+    end = start + inc * size[0] - 1e-6
+    xi = np.arange(start, end, inc)
+    xi[xi < 0] = 0
+    xi[xi > X.shape[0] - 1] = X.shape[0] - 1
+
+    start = (1.0 - ratio[1]) / (2.0 * ratio[1])
+    inc = 1.0 / ratio[1]
+    end = start + inc * size[1] - 1e-6
+    yi = np.arange(start, end, inc)
+    yi[yi < 0] = 0
+    yi[yi > X.shape[1] - 1] = X.shape[1] - 1
+
+    start = (1.0 - ratio[2]) / (2.0 * ratio[2])
+    inc = 1.0 / ratio[2]
+    end = start + inc * size[2] - 1e-6
+    zi = np.arange(start, end, inc)
+    zi[zi < 0] = 0
+    zi[zi > X.shape[2] - 1] = X.shape[2] - 1
+
+    xig, yig, zig = np.meshgrid(xi, yi, zi, indexing='ij', sparse=True)
+    interpolator = rgi((range(X.shape[0]), range(X.shape[1]), range(X.shape[2])), X, method=method)
+    Y = interpolator((xig, yig, zig))
+
+    if return_locations:
+        return Y, xig, yig, zig
+    else:
+        return Y
+
+# Augmentation of FA with gaussian noise and gamma transform
+def augment_fa(X, gamma_std, max_noise_std_fa):
+    gamma_fa = np.exp(gamma_std * np.random.randn(1)[0])
+    noise_std = max_noise_std_fa * np.random.rand(1)[0]
+    Y = X + noise_std * np.random.randn(*X.shape)
+    Y[Y < 0] = 0
+    Y[Y > 1] = 1
+    Y = Y ** gamma_fa
+    return Y
+
+# Augmentation of T1 intensities with random contrast, brightness, gamma, and gaussian noise
+def augment_t1(X, gamma_std, contrast_std, brightness_std, max_noise_std):
+    # TODO: maybe add bias field? If we're working with FreeSurfer processed images maybe it's not too important
+    gamma_t1 = np.exp(gamma_std * np.random.randn(1)[0])  # TODO: maybe make it spatially variable?
+    contrast = np.min((1.4, np.max((0.6, 1.0 + contrast_std * np.random.randn(1)[0]))))
+    brightness = np.min((0.4, np.max((-0.4, brightness_std * np.random.randn(1)[0]))))
+    noise_std = max_noise_std * np.random.rand(1)[0]
+    Y = ((X - 0.5) * contrast + (0.5 + brightness)) + noise_std * np.random.randn(*X.shape)
+    Y[Y < 0] = 0
+    Y[Y > 1] = 1
+    Y = Y ** gamma_t1
+    return Y

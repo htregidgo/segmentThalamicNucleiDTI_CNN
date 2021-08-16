@@ -25,6 +25,9 @@ contrast_std = 0.1
 brightness_std = 0.1
 # Randomize resolution during training?
 randomize_resolution = True
+# Mode of the generator. Must be fa_v1 (linear interpolation of fa, nearest of v1) or rgb (linear on rgb)
+generator_mode = 'rgb'
+# generator_mode = 'fa_v1'
 # Resolution of diffusion data (only needed if randomizing resolution; we use it to compute width of blurring kernels)
 diffusion_resolution = 1.25
 # Number of levels in Unet (5 is good)
@@ -68,6 +71,7 @@ train(training_dir,
              contrast_std=contrast_std,
              brightness_std=brightness_std,
              randomize_resolution=randomize_resolution,
+             generator_mode=generator_mode,
              diffusion_resolution=diffusion_resolution,
              n_levels=n_levels,
              nb_conv_per_level=nb_conv_per_level,
