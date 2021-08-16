@@ -16,8 +16,15 @@ from joint_diffusion_structural_seg import models
 # TODO: also, it may be a good idea to turn this into an executable so you can process different directories with
 # different models etc  all with the same command
 
-subject = 'subject_996782'
-fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/HCPlinked/'
+
+if False:
+    subject = 'subject_996782'
+    fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/HCPlinked/'
+    dataset = 'HCP'
+else:
+    subject = '016_S_4963'
+    fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/ADNIdiffusionLinked/'
+    dataset = 'ADNI'
 path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
 model_file = '/cluster/scratch/friday/models/diffusion_thalamus/dice_128.h5'
 resolution_model_file = 0.7
@@ -44,10 +51,17 @@ assert (generator_mode == 'fa_v1') | (generator_mode == 'rgb'), \
 W = 128
 
 # File names
-t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'T1w_hires.masked.norm.mgz')
-aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.mgz')
-fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_FA.nii.gz')
-v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_V1.nii.gz')
+if dataset=='HCP':
+    t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'T1w_hires.masked.norm.mgz')
+    aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.mgz')
+    fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_FA.nii.gz')
+    v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_V1.nii.gz')
+
+if dataset=='ADNI':
+    t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'norm.reg2dwi.mgz')
+    aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.reg2dwi.mgz')
+    fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'data_dtifit_FA.nii.gz')
+    v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'data_dtifit_V1.nii.gz')
 
 # Read in and reorient T1
 aff_ref = np.eye(4)
@@ -59,31 +73,9 @@ if any(abs(np.diag(aff2)[:-1] - resolution_model_file) > 0.1):
     print('Warning: t1 does not have the resolution that the CNN expects; we need to resample')
     t1, aff2 = utils.rescale_voxel_size(t1, aff2, [resolution_model_file, resolution_model_file, resolution_model_file])
 
-# TODO: add option to upsample T1 to resolution of model, which we will need when processing data of lower resolutio
-# (e.g., GENFI). Then all other volumes will get resample to this space too when calling resample_like
-
-# Read and resample all the other volumes
+# Read and resample ASEG
 aseg, aff, _ = utils.load_volume(aseg_file, im_only=False)
 aseg = utils.resample_like(t1, aff2, aseg, aff, method='nearest')
-
-# TODO: we'll want to do this in the log-tensor domain
-if generator_mode=='fa_v1':
-    fa, aff, _ = utils.load_volume(fa_file, im_only=False)
-    fa = utils.resample_like(t1, aff2, fa, aff)
-    v1, aff, _ = utils.load_volume(v1_file, im_only=False)
-    v1_copy = v1.copy()
-    v1 = np.zeros([*t1.shape, 3])
-    v1[:, :, :, 0] = - utils.resample_like(t1, aff2, v1_copy[:, :, :, 0], aff, method='nearest') # minus as in generators.py
-    v1[:, :, :, 1] = utils.resample_like(t1, aff2, v1_copy[:, :, :, 1], aff, method='nearest')
-    v1[:, :, :, 2] = utils.resample_like(t1, aff2, v1_copy[:, :, :, 2], aff, method='nearest')
-    dti = np.abs(v1 * fa[..., np.newaxis])
-else:
-    fa, aff, _ = utils.load_volume(fa_file, im_only=False)
-    v1 = utils.load_volume(v1_file, im_only=True)
-    dti = np.abs(v1 * fa[..., np.newaxis])
-    fa = utils.resample_like(t1, aff2, fa, aff)
-    dti = utils.resample_like(t1, aff2, dti, aff)
-
 
 # Normalize the T1
 wm_mask = (aseg == 2) | (aseg == 41)
@@ -103,11 +95,27 @@ j2 = j1 + W
 k2 = k1 + W
 
 t1 = t1[i1:i2, j1:j2, k1:k2]
-fa = fa[i1:i2, j1:j2, k1:k2]
-dti = dti[i1:i2, j1:j2, k1:k2, :]
+aff2[:-1, -1] = aff2[:-1, -1] + np.matmul(aff2[:-1, :-1], np.array([i1, j1, k1])) # preserve the RAS coordinates
 
-# Let's be picky and preserve the RAS coordinates
-aff2[:-1, -1] = aff2[:-1, -1] + np.matmul(aff2[:-1, :-1], np.array([i1, j1, k1]))
+# Now the diffusion data
+# We only resample in the cropped region
+# TODO: we'll want to do this in the log-tensor domain
+if generator_mode=='fa_v1':
+    fa, aff, _ = utils.load_volume(fa_file, im_only=False)
+    fa = utils.resample_like(t1, aff2, fa, aff)
+    v1, aff, _ = utils.load_volume(v1_file, im_only=False)
+    v1_copy = v1.copy()
+    v1 = np.zeros([*t1.shape, 3])
+    v1[:, :, :, 0] = - utils.resample_like(t1, aff2, v1_copy[:, :, :, 0], aff, method='nearest') # minus as in generators.py
+    v1[:, :, :, 1] = utils.resample_like(t1, aff2, v1_copy[:, :, :, 1], aff, method='nearest')
+    v1[:, :, :, 2] = utils.resample_like(t1, aff2, v1_copy[:, :, :, 2], aff, method='nearest')
+    dti = np.abs(v1 * fa[..., np.newaxis])
+else:
+    fa, aff, _ = utils.load_volume(fa_file, im_only=False)
+    v1 = utils.load_volume(v1_file, im_only=True)
+    dti = np.abs(v1 * fa[..., np.newaxis])
+    fa = utils.resample_like(t1, aff2, fa, aff)
+    dti = utils.resample_like(t1, aff2, dti, aff)
 
 # Put toghether the 5D input
 input = np.concatenate((t1[..., np.newaxis], fa[..., np.newaxis], dti ), axis=-1)[np.newaxis,...]
