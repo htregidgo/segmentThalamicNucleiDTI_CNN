@@ -17,7 +17,7 @@ from distutils.util import strtobool
 def cook_data():
     # assuming that header path already exists
     # initialize all paths and names
-    data_header_dir = "/Users/markolchanyi/Desktop/Edlow_Brown/Medulla_Project/Pons_Midbrain_training_set/"
+    data_header_dir = "../../Pons_Midbrain_training_set/"
 
     if not os.path.exists(data_header_dir): # wrong training folder
         raise FileNotFoundError
@@ -31,8 +31,9 @@ def cook_data():
     ### curate cases (make sure to parse each case in case_list) ###
     print("setting cooker paths...")
     case_list = ["test"]
+    print(len(case_list))
     path_list = [data_header_dir + e + inner_path for e in case_list]
-    assert len(case_list) == 0, "no cases!" # redundant
+    assert len(case_list) != 0, "remember to add cases!" # redundant
 
     print("unwrapping and moving topup dwi files...")
     dipy_routines.import_convert_save_dwi(path_list,case_list,data_header_dir, data_name,
@@ -57,8 +58,7 @@ def collect_all_data():
 
     if not os.path.exists(data_header_dir):
         merge_data(data_header_dir)
-    assert len(os.listdir(data_header_dir)) == 0, "no cases in the training folder"
-
+        assert len(os.listdir(data_header_dir)) == 0, "no cases in the training folder"
     else:
         query = confirm_change("training directory already exists, do you want to refresh it?")
         if query:
@@ -104,7 +104,7 @@ def confirm_change(question):
 def set_dwi_paths(is_training=False):
     base_path = "HCP_training_data/"
     inner_path = "/"
-    case_names = ["mgh_1001","mgh_1002","mgh_1003"] # change this 
+    case_names = ["mgh_1001","mgh_1002","mgh_1003"] # change this
     print("extracting ",len(case_names), " cases ")
 
     if is_training:
@@ -138,7 +138,7 @@ def labelconvert_call(data_header_dir):
         tkr_temp = path + "b0.nii.gz"
         flab = path + label_name + ".label"
 
-        @TODO dirty but will fix later
+        # @TODO dirty but will fix later
         try:
             os.system("source fs") # assure freesurfer sourcing (mark's desktop)
             os.system("mri_label2vol --label " + flab
