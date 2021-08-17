@@ -157,6 +157,7 @@ def train_model(model,
                         epochs=n_epochs,
                         steps_per_epoch=n_steps,
                         callbacks=callbacks,
-                        initial_epoch=0)
+                        initial_epoch=0,
+                        use_multiprocessing=True)
 
 
