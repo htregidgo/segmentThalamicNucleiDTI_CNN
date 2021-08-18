@@ -26,7 +26,8 @@ else:
     fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/ADNIdiffusionLinked/'
     dataset = 'ADNI'
 path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
-model_file = '/cluster/scratch/friday/models/diffusion_thalamus/dice_128.h5'
+# model_file = '/cluster/scratch/friday/models/diffusion_thalamus/dice_128.h5'
+model_file = '/cluster/scratch/friday/models/diffusion_thalamus_test_random_resolution2/dice_006.h5'
 resolution_model_file = 0.7
 generator_mode = 'rgb' # rgb or Must be the same as in training
 output_seg_file = '/tmp/seg.mgz'
@@ -117,9 +118,6 @@ else:
     fa = utils.resample_like(t1, aff2, fa, aff)
     dti = utils.resample_like(t1, aff2, dti, aff)
 
-# Put toghether the 5D input
-input = np.concatenate((t1[..., np.newaxis], fa[..., np.newaxis], dti ), axis=-1)[np.newaxis,...]
-
 # Load label list
 label_list = np.load(path_label_list)
 
@@ -141,8 +139,15 @@ unet_model = models.unet(nb_features=unet_feat_count,
 
 unet_model.load_weights(model_file, by_name=True)
 
-# Predict
+# Predict with left-right flipping augmentation
+input = np.concatenate((t1[..., np.newaxis], fa[..., np.newaxis], dti ), axis=-1)[np.newaxis,...]
 posteriors = np.squeeze(unet_model.predict(input))
+posteriors_flipped = np.squeeze(unet_model.predict(input[:,::-1,:,:,:]))
+nlab = int(( len(label_list) - 1 ) / 2)
+posteriors[:,:,:,0] = 0.5 * posteriors[:,:,:,0] + 0.5 *  posteriors_flipped[::-1,:,:,0]
+posteriors[:,:,:,1:nlab+1] = 0.5 * posteriors[:,:,:,1:nlab+1] + 0.5 *  posteriors_flipped[::-1,:,:,nlab+1:]
+posteriors[:,:,:,nlab+1:] = 0.5 * posteriors[:,:,:,nlab+1:] + 0.5 *  posteriors_flipped[::-1,:,:,1:nlab+1]
+
 
 # TODO: it'd be good to do some postprocessing here. I would do something like:
 # 1. Create a mask for the whole left thalamus, as the largest connected component of the union of left labels
@@ -150,13 +155,6 @@ posteriors = np.squeeze(unet_model.predict(input))
 # 3. Set to zero the probability of all left thalamic nuclei in the voxels outside the mask
 # 4. Repeat 1-3 with the right thalamus
 # 5. Renormalize posteriors by dividing by their sum (plus epsilon)
-
-# TODO: a possible improvement: compute the posteriors for the left-right flipped inputs, and average them with the
-# posteriors of the non-flipped volume (before or after postprocessing, I don't know ... determining which one works
-# better is an empirical questions).
-# This augmentation at test time has 2 benefits: 1. it fixes some errors here and there (we've seen Dice improvements of
-# 1-2 points in SynthSeg or the hypothalamus); and 2. it explicitly makes the method symmetric (so you can be sure that
-# any left/right differences you may find in your data are not because of a bias in the deep learning model)
 
 # Compute volumes (skip background)
 voxel_vol_mm3 = np.linalg.det(aff2)
