@@ -3,6 +3,7 @@ import numpy as np
 from joint_diffusion_structural_seg import utils
 from scipy.interpolate import RegularGridInterpolator as rgi
 from scipy.ndimage import gaussian_filter as gauss_filt
+import torch
 
 # This is the first generator I tried, deforming the FA linearly and the direction with nearest neighbors
 # TODO: right now it takes 3.5 seconds on my machine... not great, not terrible
@@ -231,7 +232,7 @@ def image_seg_generator(training_dir,
 
 
 # This is a second attempt, working linearly on RGB space, which reduces the "Lego blocks" created by nearest neighbor interpolation
-# An iteration with this generator takes about 7 seconds on my machine... definitely not great, but still usable
+# Afer porting this to torch (rather than using numpy), an iteration with this generator takes about 1.5 seconds on my machine (much better than 7 seconds with numpy)
 def image_seg_generator_rgb(training_dir,
                             path_label_list,
                             batchsize=1,
@@ -266,16 +267,23 @@ def image_seg_generator_rgb(training_dir,
     xc = xx - cx
     yc = yy - cy
     zc = zz - cz
+    xc = torch.tensor(xc, device='cpu')
+    yc = torch.tensor(yc, device='cpu')
+    zc = torch.tensor(zc, device='cpu')
+    cx = torch.tensor(cx, device='cpu')
+    cy = torch.tensor(cy, device='cpu')
+    cz = torch.tensor(cz, device='cpu')
 
     # Some useful precomputations for one-hot encoding
     label_list = np.sort(np.load(path_label_list)).astype(int)
     mapping = np.zeros(1 + label_list[-1], dtype='int')
     mapping[label_list] = np.arange(len(label_list))
+    mapping = torch.tensor(mapping, device='cpu').long()
 
     xxcrop, yycrop, zzcrop = np.meshgrid(range(crop_size[0]), range(crop_size[1]), range(crop_size[2]), sparse=False, indexing='ij')
-    xxcrop = xxcrop.flatten()
-    yycrop = yycrop.flatten()
-    zzcrop = zzcrop.flatten()
+    xxcrop = torch.tensor(xxcrop.flatten(), device='cpu')
+    yycrop = torch.tensor(yycrop.flatten(), device='cpu')
+    zzcrop = torch.tensor(zzcrop.flatten(), device='cpu')
 
 
 
@@ -302,10 +310,16 @@ def image_seg_generator_rgb(training_dir,
             fa = utils.load_volume(fa_file)
             v1 = utils.load_volume(v1_file)
             seg = utils.load_volume(seg_file)
+            t1 = torch.tensor(t1, device='cpu')
+            aff = torch.tensor(aff, device='cpu')
+            fa = torch.tensor(fa, device='cpu')
+            t1 = torch.tensor(t1, device='cpu')
+            v1 = torch.tensor(v1, device='cpu')
+            seg = torch.tensor(seg, device='cpu').long()
 
             # Sample augmentation parameters
             rotations = (2 * rotation_bounds * np.random.rand(3) - rotation_bounds) / 180.0 * np.pi
-            s = 1 + (2 * scaling_bounds * np.random.rand(1) - scaling_bounds)
+            s = torch.tensor(1 + (2 * scaling_bounds * np.random.rand(1) - scaling_bounds), device='cpu')
             cropx = np.random.randint(0, nx - crop_size[0] + 1, 1)[0]
             cropy = np.random.randint(0, ny - crop_size[1] + 1, 1)[0]
             cropz = np.random.randint(0, nz - crop_size[2] + 1, 1)[0]
@@ -313,11 +327,13 @@ def image_seg_generator_rgb(training_dir,
             # Create random rotation matrix and scaling, and apply to v1 and to coordinates,
             R = utils.make_rotation_matrix(rotations)
             Rinv = np.linalg.inv(R)
+            R = torch.tensor(R, device='cpu')
+            Rinv = torch.tensor(Rinv, device='cpu')
 
             # TODO: the -1 in the first coordinate (left-right) -1 is crucial
             # I wonder if (/hope!) it's the same for every FreeSurfer processed dataset
             v1[:, :, :, 0] = - v1[:, :, :, 0]
-            v1_rot = np.zeros_like(v1)
+            v1_rot = torch.zeros(v1.shape, device='cpu')
             for row in range(3):
                 for col in range(3):
                     v1_rot[:, :, :, row] = v1_rot[:, :, :, row] + Rinv[row, col] * v1[:, :, :, col]
@@ -336,17 +352,11 @@ def image_seg_generator_rgb(training_dir,
             zz2 = zz2[cropx:cropx + crop_size[0], cropy:cropy + crop_size[1], cropz:cropz + crop_size[2]]
 
 
-            combo = np.concatenate( (t1[...,np.newaxis], dti), axis=-1 )
-            combo_interpolator = rgi((range(nx), range(ny), range(nz)), combo, method='linear', bounds_error=False, fill_value=0.0)
-            combo_def = combo_interpolator((xx2, yy2, zz2))
-
+            combo = torch.concat( (t1[...,None], dti), axis=-1 )
+            combo_def = fast_3D_interp_torch(combo, xx2, yy2, zz2, 'linear')
             t1_def = combo_def[:, :, :, 0]
             dti_def = combo_def[:, :, :, 1:]
-
-            # We do the nearest neighbor interpolation ourselves
-            idx, ok = utils.nn_interpolator_indices(xx2, yy2, zz2, nx, ny, nz)
-            seg_def = np.zeros(crop_size)
-            seg_def[ok] = seg.flatten(order='F')[idx]
+            seg_def = fast_3D_interp_torch(seg, xx2, yy2, zz2, 'nearest')
 
             # Randomization of resolution increases running time by 0.5-1.0 seconds, which is not terrible...
             if randomize_resolution:
@@ -376,18 +386,20 @@ def image_seg_generator_rgb(training_dir,
                 sigmas_diffusion[ratio_diffusion == 1] = 0 # Don't blur if we're not really going down in resolution
 
                 # Low-pass filtering to blur data!
-                t1_def = gauss_filt(t1_def, sigmas_t1, truncate=3.0)
+                t1_def = torch.tensor(gauss_filt(t1_def, sigmas_t1, truncate=3.0), device='cpu')
                 for c in range(3):
-                    dti_def[:,:,:,c] = gauss_filt(dti_def[:,:,:,c], sigmas_diffusion, truncate=3.0)
+                    dti_def[:,:,:,c] = torch.tensor(gauss_filt(dti_def[:,:,:,c], sigmas_diffusion, truncate=3.0), device='cpu')
 
-                # Subsample: will require resampling / interpolating (sigh)
-                t1_def = utils.subsample(t1_def, ratio_t1, crop_size, method='linear')
-                dti_def = utils.subsample(dti_def, ratio_diffusion, crop_size, method='linear')
+                # Subsample
+                t1_def = myzoom_torch(t1_def, 1 / ratio_t1)
+                dti_def = myzoom_torch(dti_def, 1 / ratio_diffusion)
+
+
 
             # Augment intensities t1 and fa
             # Note that if you are downsampling, augmentation happens here at low resolution (as will happen at test time)
             t1_def = utils.augment_t1(t1_def, gamma_std, contrast_std, brightness_std, max_noise_std)
-            fa_def = np.sqrt(np.sum(dti_def * dti_def, axis=-1))
+            fa_def = torch.sqrt(torch.sum(dti_def * dti_def, axis=-1))
             fa_aug = utils.augment_fa(fa_def, gamma_std, max_noise_std_fa)
             factor = fa_aug / (1e-6 + fa_def)
             dti_def = dti_def * factor[...,np.newaxis]
@@ -397,11 +409,12 @@ def image_seg_generator_rgb(training_dir,
             if randomize_resolution:
                 # TODO: it's crucial to upsample the same way as we do when predicting...
 
-                # First the T1
-                t1_def = utils.upsample(t1_def, ratio_t1, crop_size)
-                # Now the diffusion
-                dti_def = utils.upsample(dti_def, ratio_diffusion, crop_size)
-                fa_def = np.sqrt(np.sum(dti_def * dti_def, axis=-1))
+                # Using ratio_t1 and ratio_diffusion may give a size that is off 1 pixel due to rounding
+                ratio = (torch.tensor(seg_def.shape, device='cpu') / torch.tensor(t1_def.shape, device='cpu')).detach().numpy()
+                t1_def = myzoom_torch(t1_def, ratio)
+                ratio = (torch.tensor(seg_def.shape, device='cpu') / torch.tensor(dti_def.shape[:-1], device='cpu')).detach().numpy()
+                dti_def = myzoom_torch(dti_def, ratio)
+                fa_def = torch.sqrt(torch.sum(dti_def * dti_def, axis=-1))
 
 
             # TODO: possible improvement: introduce left right flipping. You need to a) flip all the volumes, b) swap
@@ -409,12 +422,10 @@ def image_seg_generator_rgb(training_dir,
 
 
             # Efficiently turn label map into one hot encoded array
-            seg_def = mapping[seg_def.astype(int)]
-            aux = np.zeros(t1_def.size * len(label_list))
-            idx = xxcrop + yycrop * t1_def.shape[0] + zzcrop * t1_def.shape[0] * t1_def.shape[1] \
-                  + seg_def.flatten() * t1_def.size # This is essentially a Matlab sub2ind
-            aux[idx] = 1.0
-            onehot = aux.reshape((*t1_def.shape, len(label_list)), order='F')
+            seg_def = mapping[seg_def.long()]
+            eye = np.eye(len(label_list))
+            eye = torch.tensor(eye, device='cpu')
+            onehot = eye[seg_def]
 
             # If you want to save to disk and open with Freeview during debugging
             # from joint_diffusion_structural_seg.utils import save_volume
@@ -425,14 +436,13 @@ def image_seg_generator_rgb(training_dir,
             # utils.save_volume(seg, aff, None, '/tmp/seg.mgz')
             # utils.save_volume(seg_def, aff, None, '/tmp/seg_def.mgz')
             # utils.save_volume(v1, aff, None, '/tmp/v1.mgz')
-            # utils.save_volume(v1_def_rot, aff, None, '/tmp/v1_def.mgz')
             # dti = np.abs(v1 * fa[..., np.newaxis])
             # utils.save_volume(dti * 255, aff, None, '/tmp/dti.mgz')
             # utils.save_volume(dti_def * 255, aff, None, '/tmp/dti_def.mgz')
             # utils.save_volume(onehot, aff, None, '/tmp/onehot_def.mgz')
 
-            list_images.append(np.concatenate((t1_def[..., np.newaxis], fa_def[..., np.newaxis], dti_def), axis=-1)[np.newaxis,...])
-            list_label_maps.append(onehot[np.newaxis,...])
+            list_images.append((torch.concat((t1_def[..., None], fa_def[..., None], dti_def), axis=-1)[None, ...]).detach().numpy())
+            list_label_maps.append((onehot[None, ...]).detach().numpy())
 
         # build list of inputs of augmentation model
         list_inputs = [list_images, list_label_maps]
@@ -445,3 +455,140 @@ def image_seg_generator_rgb(training_dir,
 
 
 
+def fast_3D_interp_torch(X, II, JJ, KK, mode):
+    if mode=='nearest':
+        IIr = torch.round(II).long()
+        JJr = torch.round(JJ).long()
+        KKr = torch.round(KK).long()
+        IIr[IIr < 0] = 0
+        JJr[JJr < 0] = 0
+        KKr[KKr < 0] = 0
+        IIr[IIr > (X.shape[0] - 1)] = (X.shape[0] - 1)
+        JJr[JJr > (X.shape[1] - 1)] = (X.shape[1] - 1)
+        KKr[KKr > (X.shape[2] - 1)] = (X.shape[2] - 1)
+        if len(X.shape)==3:
+            X = X[..., None]
+        Y = torch.zeros([*II.shape, X.shape[3]], device='cpu')
+        for channel in range(X.shape[3]):
+            aux = X[:, :, :, channel]
+            Y[:,:,:,channel] = aux[IIr, JJr, KKr]
+        if Y.shape[3] == 1:
+            Y = Y[:, :, :, 0]
+
+    elif mode=='linear':
+        ok = (II>0) & (JJ>0) & (KK>0) & (II<=X.shape[0]-1) & (JJ<=X.shape[1]-1) & (KK<=X.shape[2]-1)
+        IIv = II[ok]
+        JJv = JJ[ok]
+        KKv = KK[ok]
+
+        fx = torch.floor(IIv).long()
+        cx = fx + 1
+        cx[cx > (X.shape[0] - 1)] = (X.shape[0] - 1)
+        wcx = IIv - fx
+        wfx = 1 - wcx
+
+        fy = torch.floor(JJv).long()
+        cy = fy + 1
+        cy[cy > (X.shape[1] - 1)] = (X.shape[1] - 1)
+        wcy = JJv - fy
+        wfy = 1 - wcy
+
+        fz = torch.floor(KKv).long()
+        cz = fz + 1
+        cz[cz > (X.shape[2] - 1)] = (X.shape[2] - 1)
+        wcz = KKv - fz
+        wfz = 1 - wcz
+
+        if len(X.shape)==3:
+            X = X[..., None]
+
+        Y = torch.zeros([*II.shape, X.shape[3]], device='cpu')
+        for channel in range(X.shape[3]):
+            Xc = X[:, :, :, channel]
+
+            c000 = Xc[fx, fy, fz]
+            c100 = Xc[cx, fy, fz]
+            c010 = Xc[fx, cy, fz]
+            c110 = Xc[cx, cy, fz]
+            c001 = Xc[fx, fy, cz]
+            c101 = Xc[cx, fy, cz]
+            c011 = Xc[fx, cy, cz]
+            c111 = Xc[cx, cy, cz]
+
+            c00 = c000 * wfx + c100 * wcx
+            c01 = c001 * wfx + c101 * wcx
+            c10 = c010 * wfx + c110 * wcx
+            c11 = c011 * wfx + c111 * wcx
+
+            c0 = c00 * wfy + c10 * wcy
+            c1 = c01 * wfy + c11 * wcy
+
+            c = c0 * wfz + c1 * wcz
+
+            Yc = torch.zeros(II.shape, device='cpu')
+            Yc[ok] = c.float()
+            Y[:,:,:,channel] = Yc
+
+        if Y.shape[3]==1:
+            Y = Y[:,:,:,0]
+
+    else:
+        raise Exception('mode must be linear or nearest')
+
+    return Y
+
+def myzoom_torch(X, factor):
+
+    if len(X.shape)==3:
+        X = X[..., None]
+
+    delta = (1.0 - factor) / (2.0 * factor)
+    newsize = np.round(X.shape[:-1] * factor).astype(int)
+
+    vx = torch.arange(delta[0], delta[0] + newsize[0] / factor[0], 1 / factor[0], device='cpu')
+    vy = torch.arange(delta[1], delta[1] + newsize[1] / factor[1], 1 / factor[1], device='cpu')
+    vz = torch.arange(delta[2], delta[2] + newsize[2] / factor[2], 1 / factor[2], device='cpu')
+
+    vx[vx < 0] = 0
+    vy[vy < 0] = 0
+    vz[vz < 0] = 0
+    vx[vx > (X.shape[0]-1)] = (X.shape[0]-1)
+    vy[vy > (X.shape[1] - 1)] = (X.shape[1] - 1)
+    vz[vz > (X.shape[2] - 1)] = (X.shape[2] - 1)
+
+    fx = torch.floor(vx).int()
+    cx = fx + 1
+    cx[cx > (X.shape[0]-1)] = (X.shape[0]-1)
+    wcx = vx - fx
+    wfx = 1 - wcx
+
+    fy = torch.floor(vy).int()
+    cy = fy + 1
+    cy[cy > (X.shape[1]-1)] = (X.shape[1]-1)
+    wcy = vy - fy
+    wfy = 1 - wcy
+
+    fz = np.floor(vz).int()
+    cz = fz + 1
+    cz[cz > (X.shape[2]-1)] = (X.shape[2]-1)
+    wcz = vz - fz
+    wfz = 1 - wcz
+
+    Y = torch.zeros([newsize[0], newsize[1], newsize[2], X.shape[3]], device='cpu')
+
+    for channel in range(X.shape[3]):
+        Xc = X[:,:,:,channel]
+
+        tmp1 = torch.zeros([newsize[0], Xc.shape[1], Xc.shape[2]], device='cpu')
+        for i in range(newsize[0]):
+            tmp1[i, :, :] = wfx[i] * Xc[fx[i], :, :] +  wcx[i] * Xc[cx[i], :, :]
+        tmp2 = torch.zeros([newsize[0], newsize[1], Xc.shape[2]], device='cpu')
+        for j in range(newsize[1]):
+            tmp2[:, j, :] = wfy[j] * tmp1[:, fy[j], :] +  wcy[j] * tmp1[:, cy[j], :]
+        for k in range(newsize[2]):
+            Y[:, :, k, channel] = wfz[k] * tmp2[:, :, fz[k]] +  wcz[k] * tmp2[:, :, cz[k]]
+
+    if Y.shape[3] == 1:
+        Y = Y[:,:,:, 0]
+
+    return Y
