@@ -5,7 +5,7 @@ training_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_s
 # NPY file with list of labels
 path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
 # Directory where model files will be writte
-model_dir = '/cluster/scratch/friday/models/diffusion_thalamus_test_random_resolution/'
+model_dir = '/cluster/scratch/friday/models/diffusion_thalamus_test_random_resolution3/'
 # Batch size being volumes, it will probably be always 1...
 batchsize = 1
 # Size to which inputs will be cropped (use None to use whole volume)
@@ -55,7 +55,8 @@ dice_epochs = 200
 # Steps per epoch (1000 is good)
 steps_per_epoch = 1000
 # Checkpoint file from which training will start (use None to start from scratch)
-checkpoint = None
+# checkpoint = None
+checkpoint = '/cluster/scratch/friday/models/diffusion_thalamus_test_random_resolution2/dice_062.h5'
 
 
 train(training_dir,
