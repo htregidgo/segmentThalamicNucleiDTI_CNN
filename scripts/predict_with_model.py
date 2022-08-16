@@ -17,7 +17,7 @@ from joint_diffusion_structural_seg import models
 # different models etc  all with the same command
 
 
-if False:
+if True:
     subject = 'subject_996782'
     fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/HCPlinked/'
     dataset = 'HCP'
@@ -26,8 +26,7 @@ else:
     fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/ADNIdiffusionLinked/'
     dataset = 'ADNI'
 path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
-# model_file = '/cluster/scratch/friday/models/diffusion_thalamus/dice_128.h5'
-model_file = '/cluster/scratch/friday/models/diffusion_thalamus_test_random_resolution2/dice_006.h5'
+model_file = '/autofs/homes/002/iglesias/python/code/joint_diffusion_structural_seg/models/base_model.h5'
 resolution_model_file = 0.7
 generator_mode = 'rgb' # rgb or Must be the same as in training
 output_seg_file = '/tmp/seg.mgz'
