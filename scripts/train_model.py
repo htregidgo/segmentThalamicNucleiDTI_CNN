@@ -1,11 +1,12 @@
 from joint_diffusion_structural_seg.training import train
 
 # Path with training data
-training_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data/'
+#training_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data/'
+training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training/'
 # NPY file with list of labels
-path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
-# Directory where model files will be writte
-model_dir = '/cluster/scratch/friday/models/diffusion_thalamus_test_random_resolution3/'
+path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list.npy'
+# Directory where model files will be written
+model_dir = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThal/'
 # Batch size being volumes, it will probably be always 1...
 batchsize = 1
 # Size to which inputs will be cropped (use None to use whole volume)
@@ -49,14 +50,14 @@ lr = 1e-4
 # Decay in learning rate, if you want to schedule. I normally leave it alone (ie set it to 0)
 lr_decay = 0
 # Number of "pretraining" epochs where we use the L2 norm on the activations rather than Dice in the softmax (5-10)
-wl2_epochs = 5
+wl2_epochs = 0
 # Number of epocts with Dice
 dice_epochs = 200
 # Steps per epoch (1000 is good)
 steps_per_epoch = 1000
 # Checkpoint file from which training will start (use None to start from scratch)
-# checkpoint = None
-checkpoint = '/cluster/scratch/friday/models/diffusion_thalamus_test_random_resolution2/dice_062.h5'
+#checkpoint = None
+checkpoint = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_pytorch/wl2_005.h5'
 
 
 train(training_dir,
