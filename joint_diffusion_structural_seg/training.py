@@ -145,7 +145,7 @@ def train_model(model,
     # compile
     if metric_type == 'dice':
         model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
-                  loss=metrics.DiceLoss().loss,
+                  loss=metrics.DiceLossLabels().loss,
                   loss_weights=[1.0])
     else:
         model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
