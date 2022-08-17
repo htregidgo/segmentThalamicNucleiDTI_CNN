@@ -1,6 +1,7 @@
 import keras.backend as K
 import tensorflow as tf
 
+
 class WL2Loss(object):
 
     def __init__(self, target_value, n_labels, background_weight=1e-4, **kwargs):
@@ -13,6 +14,7 @@ class WL2Loss(object):
         loss = K.sum(weights * K.square(pred - self.target_value * (2 * gt - 1))) / (K.sum(weights) * self.n_labels)
         tf.debugging.check_numerics(loss, 'Loss not finite')
         return loss
+
 
 class DiceLoss(object):
 
@@ -28,5 +30,32 @@ class DiceLoss(object):
         bottom = tf.math.reduce_sum(bottom, axis=list(range(1, 4)))
         dice = top / bottom
         loss = 1 - dice
+        tf.debugging.check_numerics(loss, 'Loss not finite')
+        return loss
+
+
+class DiceLossLabels(object):
+
+    def __init__(self, **kwargs):
+        pass
+
+    def loss(self, y, x):
+        x = K.clip(x / tf.math.reduce_sum(x, axis=-1, keepdims=True), 0, 1)
+        y = K.clip(y / tf.math.reduce_sum(y, axis=-1, keepdims=True), 0, 1)
+        # compute dice loss for each label
+        top = tf.math.reduce_sum(2 * x * y + tf.keras.backend.epsilon(), axis=list(range(0, 3)))
+        bottom = tf.math.square(x) + tf.math.square(y) + tf.keras.backend.epsilon()
+        bottom = tf.math.reduce_sum(bottom, axis=list(range(0, 3)))
+        dice = top / bottom
+        loss = K.mean(1 - dice)
+
+        top2 = tf.math.reduce_sum(2 * x[:, :, :, 1:] * y[:, :, :, 1:] + tf.keras.backend.epsilon())
+        bottom2 = tf.math.square(x[:, :, :, 1:]) + tf.math.square(y[:, :, :, 1:]) + tf.keras.backend.epsilon()
+        bottom2 = tf.math.reduce_sum(bottom2)
+
+        dice2 = top2/bottom2
+
+        loss = (loss + 1 - dice2)/2
+
         tf.debugging.check_numerics(loss, 'Loss not finite')
         return loss
