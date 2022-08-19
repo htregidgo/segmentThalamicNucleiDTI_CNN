@@ -10,6 +10,7 @@ from joint_diffusion_structural_seg import metrics
 def train(training_dir,
              path_label_list,
              model_dir,
+             path_group_list=None,
              batchsize=1,
              crop_size=128,
              scaling_bounds=0.15,
@@ -79,6 +80,14 @@ def train(training_dir,
     label_list = np.sort(np.load(path_label_list)).astype(int)
     n_labels = np.size(label_list)
 
+    if path_group_list is not None:
+        group_seg = np.load(path_group_list)
+        n_groups = group_seg.max() + 1
+    else:
+        group_seg = None
+        n_groups = None
+
+
     if crop_size is None:
         aux = next(generator)
         crop_size = aux[0].shape[1:-1]
@@ -106,7 +115,8 @@ def train(training_dir,
         checkpoint = os.path.join(model_dir, 'wl2_%03d.h5' % wl2_epochs)
 
     # fine-tuning with dice metric
-    train_model(unet_model, generator, lr, lr_decay, dice_epochs, steps_per_epoch, model_dir, 'dice', n_labels, checkpoint)
+    train_model(unet_model, generator, lr, lr_decay, dice_epochs, steps_per_epoch, model_dir, 'dice', n_labels,
+                group_seg, n_groups, checkpoint)
 
     print('All done!')
 
@@ -120,6 +130,8 @@ def train_model(model,
                 model_dir,
                 metric_type,
                 n_labels,
+                group_seg=None,
+                n_groups=None,
                 path_checkpoint=None):
 
     # prepare log folder
@@ -144,9 +156,15 @@ def train_model(model,
 
     # compile
     if metric_type == 'dice':
-        model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
-                  loss=metrics.DiceLossLabels().loss,
-                  loss_weights=[1.0])
+        if (group_seg is not None) & (n_groups is not None):
+            model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
+                      loss=metrics.DiceLossGrouped(group_seg, n_groups).loss,
+                      loss_weights=[1.0])
+            print('Here we go')
+        else:
+            model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
+                          loss=metrics.DiceLossLabels().loss,
+                          loss_weights=[1.0])
     else:
         model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
                       loss=metrics.WL2Loss(3.0, n_labels, background_weight=0.01).loss, # since we crop, 0.01 is ok
