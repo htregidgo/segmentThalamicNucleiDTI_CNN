@@ -2,11 +2,14 @@ from joint_diffusion_structural_seg.training import train
 
 # Path with training data
 #training_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data/'
-training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training/'
+training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_new/'
 # NPY file with list of labels
 path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list.npy'
 # Directory where model files will be written
-model_dir = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThal/'
+# model_dir = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThaldebug/'
+model_dir = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_newTrainingSet'
+# NPY file with segmentation of channels into groups
+path_group_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_group_seg.npy'
 # Batch size being volumes, it will probably be always 1...
 batchsize = 1
 # Size to which inputs will be cropped (use None to use whole volume)
@@ -63,6 +66,7 @@ checkpoint = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_struct
 train(training_dir,
              path_label_list,
              model_dir,
+             path_group_list=path_group_list,
              batchsize=batchsize,
              crop_size=crop_size,
              scaling_bounds=scaling_bounds,
