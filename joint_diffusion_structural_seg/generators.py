@@ -1,5 +1,6 @@
 import glob
 import numpy as np
+import os
 from joint_diffusion_structural_seg import utils
 from scipy.interpolate import RegularGridInterpolator as rgi
 from scipy.ndimage import gaussian_filter as gauss_filt
@@ -248,7 +249,7 @@ def image_seg_generator_rgb(training_dir,
                             diffusion_resolution=None):
 
     # Read directory to get list of training cases
-    t1_list = glob.glob(training_dir + '/*.t1.nii.gz')
+    t1_list = glob.glob(training_dir + '/subject*/*.t1.nii.gz')
     n_training = len(t1_list)
     print('Found %d cases for training' % n_training)
 
@@ -300,11 +301,20 @@ def image_seg_generator_rgb(training_dir,
         for index in indices:
 
             # read images
+            # TODO: this may go wrong with a larger batchsize
             t1_file = t1_list[index]
-            prefix = t1_list[index][:-10]
-            fa_file = prefix + '.fa.nii.gz'
-            v1_file = prefix + '.v1.nii.gz'
-            seg_file = prefix + '.seg.nii.gz'
+            subject_path = os.path.split(t1_file)[0]
+
+            seg_list = glob.glob(subject_path + '/segs/*nii.gz')
+            seg_index = np.random.randint(len(seg_list))
+            seg_file = seg_list[seg_index]
+
+            fa_list = glob.glob(subject_path + '/dmri/*_fa.nii.gz')
+            fa_index = np.random.randint(len(fa_list))
+
+            fa_file = fa_list[fa_index]
+            prefix = fa_file[:-10]
+            v1_file = prefix + '_v1.nii.gz'
 
             t1, aff, _ = utils.load_volume(t1_file, im_only=False)
             fa = utils.load_volume(fa_file)
