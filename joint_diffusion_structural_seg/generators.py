@@ -352,7 +352,7 @@ def image_seg_generator_rgb(training_dir,
             yy2 = cy + s * (R[1, 0] * xc + R[1, 1] * yc + R[1, 2] * zc)
             zz2 = cz + s * (R[2, 0] * xc + R[2, 1] * yc + R[2, 2] * zc)
 
-            # We use the rotated v1 to create the RGB (DTI) volume and the forget about V1 / nearest neighbor interpolation
+            # We use the rotated v1 to create the RGB (DTI) volume and then forget about V1 / nearest neighbor interpolation
             dti = np.abs(v1_rot * fa[..., np.newaxis])
 
             # Interpolate!  There is no need to interpolate everywhere; only in the area we will (randomly) crop
@@ -361,6 +361,28 @@ def image_seg_generator_rgb(training_dir,
             yy2 = yy2[cropx:cropx + crop_size[0], cropy:cropy + crop_size[1], cropz:cropz + crop_size[2]]
             zz2 = zz2[cropx:cropx + crop_size[0], cropy:cropy + crop_size[1], cropz:cropz + crop_size[2]]
 
+            # Add trilinear spline deformation
+            def_basis_size = np.array([5] * 3)
+            basis_dist = (np.array(crop_size) - 1.) / (def_basis_size - 1.)
+            deformation_max = 5.0
+            deformation_max = deformation_max / t1_resolution
+            def_basis_seed = np.random.rand(3, def_basis_size[0], def_basis_size[1], def_basis_size[2])
+
+            replace_def_max = deformation_max > (basis_dist / 3.)
+            deformation_max[replace_def_max] = basis_dist[replace_def_max] / 3.
+
+            def_basis = 2 * deformation_max[:, None, None, None] * (def_basis_seed - 0.5)
+
+            def_basis = torch.tensor(def_basis[None, ...], device='cpu')
+
+            def_array = torch.nn.functional.interpolate(def_basis,
+                                                        size=(crop_size[0], crop_size[1], crop_size[2]),
+                                                        mode='trilinear',
+                                                        align_corners=True)
+
+            xx2 = xx2 + def_array[0, 0, ...]
+            yy2 = yy2 + def_array[0, 1, ...]
+            zz2 = zz2 + def_array[0, 2, ...]
 
             combo = torch.concat( (t1[...,None], dti), axis=-1 )
             combo_def = fast_3D_interp_torch(combo, xx2, yy2, zz2, 'linear')
