@@ -286,13 +286,18 @@ def image_seg_generator_rgb(training_dir,
     yycrop = torch.tensor(yycrop.flatten(), device='cpu')
     zzcrop = torch.tensor(zzcrop.flatten(), device='cpu')
 
-
+    # indices =0
 
     # Generate!
+    # count = 0
     while True:
 
         # randomly pick as many images as batchsize
         indices = np.random.randint(n_training, size=batchsize)
+        # indices = [count]
+
+        # at end of loop indices += 1
+        # overflow to 0 once through all examples
 
         # initialise input lists
         list_images = []
@@ -434,7 +439,17 @@ def image_seg_generator_rgb(training_dir,
             fa_def = torch.sqrt(torch.sum(dti_def * dti_def, axis=-1))
             fa_aug = utils.augment_fa(fa_def, gamma_std, max_noise_std_fa)
             factor = fa_aug / (1e-6 + fa_def)
-            dti_def = dti_def * factor[...,np.newaxis]
+            dti_def = dti_def * factor[..., np.newaxis]
+
+            # Add some truly random DTI voxels
+            selector = np.random.rand(*factor.shape) > 0.9999
+            n_selected = np.sum(selector)
+            dti_def[selector, :] = torch.rand(n_selected, 3, dtype=dti_def.dtype)
+            fa_aug[selector] = 0.5+0.5*torch.rand(n_selected, dtype=fa_aug.dtype)
+            fa_def = torch.sqrt(torch.sum(dti_def * dti_def, axis=-1))
+            factor = fa_aug / (1e-6 + fa_def)
+            dti_def = dti_def * factor[..., np.newaxis]
+
 
 
             # Bring back to original resolution if needed
@@ -475,6 +490,10 @@ def image_seg_generator_rgb(training_dir,
 
             list_images.append((torch.concat((t1_def[..., None], fa_def[..., None], dti_def), axis=-1)[None, ...]).detach().numpy())
             list_label_maps.append((onehot[None, ...]).detach().numpy())
+
+            # count += 1
+            # if count == len(number of examples in validation set):
+            #     count = 0
 
         # build list of inputs of augmentation model
         list_inputs = [list_images, list_label_maps]
