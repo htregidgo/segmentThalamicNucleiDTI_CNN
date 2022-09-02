@@ -9,6 +9,7 @@ import os
 import numpy as np
 import joint_diffusion_structural_seg.utils as utils
 from joint_diffusion_structural_seg import models
+from scipy import ndimage
 
 # TODO: you don't want to create a Unet for every subject... it's be good to write a loop over subjects in the provided
 # FreeSurfer directory and push them through the Unet
@@ -17,20 +18,43 @@ from joint_diffusion_structural_seg import models
 # different models etc  all with the same command
 
 
-if True:
-    subject = 'subject_996782'
-    fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/HCPlinked/'
+if False:
+    # subject = 'subject_996782'
+    subject = 'subject_101309'
+    # fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/HCPlinked/'
+    fs_subject_dir = '/home/henry/Documents/Brain/HCPDataset/HCP/'
     dataset = 'HCP'
+elif False:
+    # subject = 'DRC_01_0334_08_03_1'
+    subject = 'DRC_01_0335_08_03_1'
+    fs_subject_dir = '/home/henry/Documents/Brain/DRC/DRCfreesurferThalamus'
+    dataset = 'DRC'
+elif True:
+    subject = 'subject_template'
+    fs_subject_dir = '/home/henry/Documents/Brain/HCPDataset/HCP/'
+    dataset = 'template'
 else:
-    subject = '016_S_4963'
-    fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/ADNIdiffusionLinked/'
+    subject = '005_S_5038'
+    # subject = '003_S_4900'
+    fs_subject_dir = '/home/henry/Documents/Brain/ADNI/ADNI_for_figures'
+    # fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/ADNIdiffusionLinked/'
     dataset = 'ADNI'
-path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
-model_file = '/autofs/homes/002/iglesias/python/code/joint_diffusion_structural_seg/models/base_model.h5'
+# path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
+path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list.npy'
+# model_file = '/autofs/homes/002/iglesias/python/code/joint_diffusion_structural_seg/models/base_model.h5'
+# model_file = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThaldebug/dice_011.h5'
+# model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_newTrainingSet/dice_001.h5'
+# model_file = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLoss/dice_002.h5'
+# model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_pytorch/dice_006.h5'
+model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_deformation_fromScratch_speckle/dice_057.h5'
 resolution_model_file = 0.7
 generator_mode = 'rgb' # rgb or Must be the same as in training
-output_seg_file = '/tmp/seg.mgz'
-output_vol_file = '/tmp/vols.npy'
+
+if not os.path.exists(os.path.join(fs_subject_dir, subject, 'results')):
+    os.mkdir(os.path.join(fs_subject_dir, subject, 'results'))
+
+output_seg_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_speckle_fill.seg.mgz')
+output_vol_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_speckle_fill.vol.npy')
 
 ##########################################################################################
 
@@ -58,10 +82,31 @@ if dataset=='HCP':
     v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_V1.nii.gz')
 
 if dataset=='ADNI':
-    t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'norm.reg2dwi.mgz')
-    aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.reg2dwi.mgz')
-    fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'data_dtifit_FA.nii.gz')
-    v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'data_dtifit_V1.nii.gz')
+    # t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'norm.reg2dwi.mgz')
+    # aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.reg2dwi.mgz')
+    # fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'data_dtifit_FA.nii.gz')
+    # v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'data_dtifit_V1.nii.gz')
+    t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'norm.mgz')
+    aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.mgz')
+    fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1K_FA.nii.gz')
+    v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1K_V1.nii.gz')
+
+if dataset == 'template':
+    t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'norm.mgz')
+    aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.mgz')
+    fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_FA.nii.gz')
+    v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_V1.nii.gz')
+
+
+if dataset=='DRC':
+    # t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'norm.reg2dwi.mgz')
+    # aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.reg2dwi.mgz')
+    # fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'data_dtifit_FA.nii.gz')
+    # v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'data_dtifit_V1.nii.gz')
+    t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'norm.mgz')
+    aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.mgz')
+    fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1K_FA.nii.gz')
+    v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1K_V1.nii.gz')
 
 # Read in and reorient T1
 aff_ref = np.eye(4)
@@ -147,6 +192,13 @@ posteriors[:,:,:,0] = 0.5 * posteriors[:,:,:,0] + 0.5 *  posteriors_flipped[::-1
 posteriors[:,:,:,1:nlab+1] = 0.5 * posteriors[:,:,:,1:nlab+1] + 0.5 *  posteriors_flipped[::-1,:,:,nlab+1:]
 posteriors[:,:,:,nlab+1:] = 0.5 * posteriors[:,:,:,nlab+1:] + 0.5 *  posteriors_flipped[::-1,:,:,1:nlab+1]
 
+# Fill holes
+thal_mask = posteriors[..., 0] < 0.5
+thal_mask = ndimage.binary_fill_holes(thal_mask)
+posteriors[thal_mask, 0] = 0
+posteriors /= np.sum(posteriors, axis=-1)[..., np.newaxis]
+
+#components, n_components = ndimage.label(thal_mask)
 
 # TODO: it'd be good to do some postprocessing here. I would do something like:
 # 1. Create a mask for the whole left thalamus, as the largest connected component of the union of left labels
