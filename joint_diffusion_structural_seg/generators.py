@@ -246,7 +246,12 @@ def image_seg_generator_rgb(training_dir,
                             brightness_std=0.1,
                             crop_size=None,
                             randomize_resolution=False,
-                            diffusion_resolution=None):
+                            diffusion_resolution=None,
+                            seg_selection='combined'):
+
+    # check type of one-hot encoding
+    assert (seg_selection == 'single') or (seg_selection == 'combined'),\
+        'seg_selection must be single or combined'
 
     # Read directory to get list of training cases
     t1_list = glob.glob(training_dir + '/subject*/*.t1.nii.gz')
@@ -281,10 +286,7 @@ def image_seg_generator_rgb(training_dir,
     mapping[label_list] = np.arange(len(label_list))
     mapping = torch.tensor(mapping, device='cpu').long()
 
-    xxcrop, yycrop, zzcrop = np.meshgrid(range(crop_size[0]), range(crop_size[1]), range(crop_size[2]), sparse=False, indexing='ij')
-    xxcrop = torch.tensor(xxcrop.flatten(), device='cpu')
-    yycrop = torch.tensor(yycrop.flatten(), device='cpu')
-    zzcrop = torch.tensor(zzcrop.flatten(), device='cpu')
+
 
     # indices =0
 
@@ -311,8 +313,21 @@ def image_seg_generator_rgb(training_dir,
             subject_path = os.path.split(t1_file)[0]
 
             seg_list = glob.glob(subject_path + '/segs/*nii.gz')
-            seg_index = np.random.randint(len(seg_list))
-            seg_file = seg_list[seg_index]
+
+            # either pick a single seg to train towards or import them all and average the onehot
+            if seg_selection == 'single':
+                seg_index = np.random.randint(len(seg_list))
+                seg_file = seg_list[seg_index]
+                seg = utils.load_volume(seg_file)
+                seg = torch.tensor(seg, device='cpu').long()
+            else:
+                seg = utils.load_volume(seg_list[0])
+                seg = torch.tensor(seg, device='cpu').long()
+                seg = seg[..., None]
+                for il in range(1, len(seg_list)):
+                    np_seg = utils.load_volume(seg_list[il])
+                    seg = torch.concat((seg, torch.tensor(np_seg[..., None], device='cpu')), dim=3)
+
 
             fa_list = glob.glob(subject_path + '/dmri/*_fa.nii.gz')
             fa_index = np.random.randint(len(fa_list))
@@ -324,13 +339,10 @@ def image_seg_generator_rgb(training_dir,
             t1, aff, _ = utils.load_volume(t1_file, im_only=False)
             fa = utils.load_volume(fa_file)
             v1 = utils.load_volume(v1_file)
-            seg = utils.load_volume(seg_file)
             t1 = torch.tensor(t1, device='cpu')
             aff = torch.tensor(aff, device='cpu')
             fa = torch.tensor(fa, device='cpu')
-            t1 = torch.tensor(t1, device='cpu')
             v1 = torch.tensor(v1, device='cpu')
-            seg = torch.tensor(seg, device='cpu').long()
 
             # Sample augmentation parameters
             rotations = (2 * rotation_bounds * np.random.rand(3) - rotation_bounds) / 180.0 * np.pi
@@ -389,7 +401,7 @@ def image_seg_generator_rgb(training_dir,
             yy2 = yy2 + def_array[0, 1, ...]
             zz2 = zz2 + def_array[0, 2, ...]
 
-            combo = torch.concat( (t1[...,None], dti), axis=-1 )
+            combo = torch.concat( (t1[...,None], dti), dim=-1 )
             combo_def = fast_3D_interp_torch(combo, xx2, yy2, zz2, 'linear')
             t1_def = combo_def[:, :, :, 0]
             dti_def = combo_def[:, :, :, 1:]
@@ -446,7 +458,7 @@ def image_seg_generator_rgb(training_dir,
             n_selected = np.sum(selector)
             dti_def[selector, :] = torch.rand(n_selected, 3, dtype=dti_def.dtype)
             fa_aug[selector] = 0.5+0.5*torch.rand(n_selected, dtype=fa_aug.dtype)
-            fa_def = torch.sqrt(torch.sum(dti_def * dti_def, axis=-1))
+            fa_def = torch.sqrt(torch.sum(dti_def * dti_def, dim=-1))
             factor = fa_aug / (1e-6 + fa_def)
             dti_def = dti_def * factor[..., np.newaxis]
 
@@ -457,11 +469,11 @@ def image_seg_generator_rgb(training_dir,
                 # TODO: it's crucial to upsample the same way as we do when predicting...
 
                 # Using ratio_t1 and ratio_diffusion may give a size that is off 1 pixel due to rounding
-                ratio = (torch.tensor(seg_def.shape, device='cpu') / torch.tensor(t1_def.shape, device='cpu')).detach().numpy()
+                ratio = (torch.tensor(seg_def.shape[:3], device='cpu') / torch.tensor(t1_def.shape, device='cpu')).detach().numpy()
                 t1_def = myzoom_torch(t1_def, ratio)
-                ratio = (torch.tensor(seg_def.shape, device='cpu') / torch.tensor(dti_def.shape[:-1], device='cpu')).detach().numpy()
+                ratio = (torch.tensor(seg_def.shape[:3], device='cpu') / torch.tensor(dti_def.shape[:-1], device='cpu')).detach().numpy()
                 dti_def = myzoom_torch(dti_def, ratio)
-                fa_def = torch.sqrt(torch.sum(dti_def * dti_def, axis=-1))
+                fa_def = torch.sqrt(torch.sum(dti_def * dti_def, dim=-1))
 
 
             # TODO: possible improvement: introduce left right flipping. You need to a) flip all the volumes, b) swap
@@ -469,10 +481,8 @@ def image_seg_generator_rgb(training_dir,
 
 
             # Efficiently turn label map into one hot encoded array
-            seg_def = mapping[seg_def.long()]
-            eye = np.eye(len(label_list))
-            eye = torch.tensor(eye, device='cpu')
-            onehot = eye[seg_def]
+
+            onehot = encode_onehot(mapping, seg_def, label_list, seg_selection)
 
             # If you want to save to disk and open with Freeview during debugging
             # from joint_diffusion_structural_seg.utils import save_volume
@@ -504,6 +514,152 @@ def image_seg_generator_rgb(training_dir,
 
         yield list_inputs
 
+
+def image_seg_generator_rgb_validation(training_dir,
+                            path_label_list,
+                            batchsize=1,
+                            scaling_bounds=0.15,
+                            rotation_bounds=15,
+                            max_noise_std=0.1,
+                            max_noise_std_fa=0.03,
+                            gamma_std=0.1,
+                            contrast_std=0.1,
+                            brightness_std=0.1,
+                            crop_size=None,
+                            randomize_resolution=False,
+                            diffusion_resolution=None,
+                            seg_selection='combined'):
+
+    # check type of one-hot encoding
+    assert (seg_selection == 'single') or (seg_selection == 'combined'),\
+        'seg_selection must be single or combined'
+
+    # Read directory to get list of training cases
+    t1_list = glob.glob(training_dir + '/subject*/*.t1.nii.gz')
+    n_training = len(t1_list)
+    print('Found %d cases for training' % n_training)
+
+    # Get size from first volume
+    aux, aff, _ = utils.load_volume(t1_list[0], im_only=False)
+    nx, ny, nz = aux.shape
+    if crop_size is None:
+        crop_size = aux.shape
+    if type(crop_size) == int:
+        crop_size = [crop_size] * 3
+
+    # Some useful precomputations for one-hot encoding
+    label_list = np.sort(np.load(path_label_list)).astype(int)
+    mapping = np.zeros(1 + label_list[-1], dtype='int')
+    mapping[label_list] = np.arange(len(label_list))
+    mapping = torch.tensor(mapping, device='cpu').long()
+
+    # Generate!
+    count = 0
+    while True:
+
+        # randomly pick as many images as batchsize
+        indices = list(range(count, count+batchsize))
+        count += batchsize
+
+        if count >= n_training:
+            count = 0
+        # ToDo handle overflow within the indices when batchsize does not divide n_training
+        # mostly won't affect us as we're using batchsize 1
+
+        # initialise input lists
+        list_images = []
+        list_label_maps = []
+
+        for index in indices:
+
+            # read images
+            # TODO: this may go wrong with a larger batchsize
+            t1_file = t1_list[index]
+            subject_path = os.path.split(t1_file)[0]
+
+            seg_list = glob.glob(subject_path + '/segs/*nii.gz')
+
+            # either pick a single seg to train towards or import them all and average the onehot
+            if seg_selection == 'single':
+                seg_index = np.random.randint(len(seg_list))
+                seg_file = seg_list[seg_index]
+                seg = utils.load_volume(seg_file)
+                seg = torch.tensor(seg, device='cpu').long()
+            else:
+                seg = utils.load_volume(seg_list[0])
+                seg = torch.tensor(seg, device='cpu').long()
+                seg = seg[..., None]
+                for il in range(1, len(seg_list)):
+                    np_seg = utils.load_volume(seg_list[il])
+                    seg = torch.concat((seg, torch.tensor(np_seg[..., None], device='cpu')), dim=3)
+
+
+            fa_list = glob.glob(subject_path + '/dmri/*_fa.nii.gz')
+            fa_index = np.random.randint(len(fa_list))
+
+            fa_file = fa_list[fa_index]
+            prefix = fa_file[:-10]
+            v1_file = prefix + '_v1.nii.gz'
+
+            t1, aff, _ = utils.load_volume(t1_file, im_only=False)
+            fa = utils.load_volume(fa_file)
+            v1 = utils.load_volume(v1_file)
+            t1 = torch.tensor(t1, device='cpu')
+            aff = torch.tensor(aff, device='cpu')
+            fa = torch.tensor(fa, device='cpu')
+            v1 = torch.tensor(v1, device='cpu')
+
+            # Sample augmentation parameters
+            cropx = int(np.floor(nx - crop_size[0])/2)
+            cropy = int(np.floor(ny - crop_size[1])/2)
+            cropz = int(np.floor(nz - crop_size[2])/2)
+
+            v1_crop = v1[cropx:cropx+crop_size[0],
+                     cropy:cropy+crop_size[1],
+                     cropz:cropz+crop_size[2], :]
+
+            t1_crop = t1[cropx:cropx+crop_size[0],
+                     cropy:cropy+crop_size[1],
+                     cropz:cropz+crop_size[2]]
+
+            seg_crop = seg[cropx:cropx+crop_size[0],
+                     cropy:cropy+crop_size[1],
+                     cropz:cropz+crop_size[2]]
+
+            fa_crop = fa[cropx:cropx+crop_size[0],
+                     cropy:cropy+crop_size[1],
+                     cropz:cropz+crop_size[2]]
+
+            dti_crop = np.abs(v1_crop * fa_crop[..., np.newaxis])
+
+            onehot = encode_onehot(mapping, seg_crop, label_list, seg_selection)
+
+            # If you want to save to disk and open with Freeview during debugging
+            # from joint_diffusion_structural_seg.utils import save_volume
+            # utils.save_volume(t1, aff, None, '/tmp/t1.mgz')
+            # utils.save_volume(t1_crop, aff, None, '/tmp/t1_crop.mgz')
+            # utils.save_volume(fa, aff, None, '/tmp/fa.mgz')
+            # utils.save_volume(fa_crop, aff, None, '/tmp/fa_crop.mgz')
+            # utils.save_volume(seg, aff, None, '/tmp/seg.mgz')
+            # utils.save_volume(seg_crop, aff, None, '/tmp/seg_crop.mgz')
+            # utils.save_volume(v1, aff, None, '/tmp/v1.mgz')
+            # dti = np.abs(v1 * fa[..., np.newaxis])
+            # utils.save_volume(dti * 255, aff, None, '/tmp/dti.mgz')
+            # utils.save_volume(dti_def * 255, aff, None, '/tmp/dti_def.mgz')
+            # utils.save_volume(onehot, aff, None, '/tmp/onehot_def.mgz')
+
+            list_images.append((torch.concat((t1_crop[..., None], fa_crop[..., None], dti_crop), dim=-1)[None, ...]).detach().numpy())
+            list_label_maps.append((onehot[None, ...]).detach().numpy())
+
+
+        # build list of inputs of augmentation model
+        list_inputs = [list_images, list_label_maps]
+        if batchsize > 1:  # concatenate each input type if batchsize > 1
+            list_inputs = [np.concatenate(item, 0) for item in list_inputs]
+        else:
+            list_inputs = [item[0] for item in list_inputs]
+
+        yield list_inputs
 
 
 def fast_3D_interp_torch(X, II, JJ, KK, mode):
@@ -643,3 +799,21 @@ def myzoom_torch(X, factor):
         Y = Y[:,:,:, 0]
 
     return Y
+
+def encode_onehot(mapping, seg_def, label_list, seg_selection):
+
+    if seg_selection == 'single':
+        seg_def = mapping[seg_def.long()]
+        eye = np.eye(len(label_list))
+        eye = torch.tensor(eye, device='cpu')
+        onehot = eye[seg_def]
+    else:
+        seg_def = mapping[seg_def.long()]
+        eye = np.eye(len(label_list))
+        eye = torch.tensor(eye, device='cpu')
+        onehot = eye[seg_def]
+        onehot = torch.sum(onehot, dim=3)
+        onehot /= torch.sum(onehot, dim=-1, keepdim=True)
+
+
+    return onehot
