@@ -2,7 +2,7 @@ import os
 import numpy as np
 import keras.callbacks as KC
 from keras.optimizers import Adam
-from joint_diffusion_structural_seg.generators import image_seg_generator, image_seg_generator_rgb
+from joint_diffusion_structural_seg.generators import image_seg_generator, image_seg_generator_rgb, image_seg_generator_rgb_validation
 from joint_diffusion_structural_seg import models
 from joint_diffusion_structural_seg import metrics
 
@@ -11,6 +11,7 @@ def train(training_dir,
              path_label_list,
              model_dir,
              path_group_list=None,
+             validation_dir=None,
              batchsize=1,
              crop_size=128,
              scaling_bounds=0.15,
@@ -80,6 +81,23 @@ def train(training_dir,
     label_list = np.sort(np.load(path_label_list)).astype(int)
     n_labels = np.size(label_list)
 
+    if validation_dir is not None:
+        validation_generator = image_seg_generator_rgb_validation(validation_dir,
+                                path_label_list,
+                                batchsize=batchsize,
+                                scaling_bounds=scaling_bounds,
+                                rotation_bounds=rotation_bounds,
+                                max_noise_std=max_noise_std,
+                                max_noise_std_fa=max_noise_std_fa,
+                                gamma_std=gamma_std,
+                                contrast_std=contrast_std,
+                                brightness_std=brightness_std,
+                                crop_size=crop_size,
+                                randomize_resolution=randomize_resolution,
+                                diffusion_resolution=diffusion_resolution)
+    else:
+        validation_generator = None
+
     if path_group_list is not None:
         group_seg = np.load(path_group_list)
         n_groups = group_seg.max() + 1
@@ -116,7 +134,7 @@ def train(training_dir,
 
     # fine-tuning with dice metric
     train_model(unet_model, generator, lr, lr_decay, dice_epochs, steps_per_epoch, model_dir, 'dice', n_labels,
-                group_seg, n_groups, checkpoint)
+                group_seg, n_groups, checkpoint, validation_generator=validation_generator)
 
     print('All done!')
 
@@ -132,7 +150,8 @@ def train_model(model,
                 n_labels,
                 group_seg=None,
                 n_groups=None,
-                path_checkpoint=None):
+                path_checkpoint=None,
+                validation_generator=None):
 
     # prepare log folder
     log_dir = os.path.join(model_dir, 'logs')
@@ -171,11 +190,22 @@ def train_model(model,
                       loss_weights=[1.0])
 
     # fit
-    model.fit_generator(generator,
-                        epochs=n_epochs,
-                        steps_per_epoch=n_steps,
-                        callbacks=callbacks,
-                        initial_epoch=0,
-                        use_multiprocessing=True)
+    if validation_generator is not None:
+        model.fit_generator(generator,
+                            epochs=n_epochs,
+                            steps_per_epoch=n_steps,
+                            callbacks=callbacks,
+                            initial_epoch=0,
+                            use_multiprocessing=True,
+                            validation_data=validation_generator,
+                            validation_steps=60,
+                            validation_freq=5)
+    else:
+        model.fit_generator(generator,
+                            epochs=n_epochs,
+                            steps_per_epoch=n_steps,
+                            callbacks=callbacks,
+                            initial_epoch=0,
+                            use_multiprocessing=True)
 
 
