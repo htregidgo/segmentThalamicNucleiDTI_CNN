@@ -2,12 +2,14 @@ from joint_diffusion_structural_seg.training import train
 
 # Path with training data
 #training_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data/'
-training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_new/'
+training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_withValidation/train/'
+validation_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_withValidation/validate/'
+# validation_dir = None
 # NPY file with list of labels
 path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list.npy'
 # Directory where model files will be written
 # model_dir = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThaldebug/'
-model_dir = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_newTrainingSet'
+model_dir = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_mixedOnehot2'
 # NPY file with segmentation of channels into groups
 path_group_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_group_seg.npy'
 # Batch size being volumes, it will probably be always 1...
@@ -53,20 +55,22 @@ lr = 1e-4
 # Decay in learning rate, if you want to schedule. I normally leave it alone (ie set it to 0)
 lr_decay = 0
 # Number of "pretraining" epochs where we use the L2 norm on the activations rather than Dice in the softmax (5-10)
-wl2_epochs = 0
+wl2_epochs = 5
 # Number of epocts with Dice
 dice_epochs = 200
 # Steps per epoch (1000 is good)
 steps_per_epoch = 1000
+# steps_per_epoch = 240
 # Checkpoint file from which training will start (use None to start from scratch)
-#checkpoint = None
-checkpoint = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_pytorch/wl2_005.h5'
-
+checkpoint = None
+# checkpoint = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_deformation_fromScratch_withl2/wl2_005.h5'
+# checkpoint = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_deformation/dice_001.h5'
 
 train(training_dir,
              path_label_list,
              model_dir,
              path_group_list=path_group_list,
+             validation_dir=validation_dir,
              batchsize=batchsize,
              crop_size=crop_size,
              scaling_bounds=scaling_bounds,
