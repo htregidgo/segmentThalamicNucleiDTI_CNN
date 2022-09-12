@@ -239,6 +239,7 @@ def image_seg_generator_rgb(training_dir,
                             batchsize=1,
                             scaling_bounds=0.15,
                             rotation_bounds=15,
+                            nonlinear_rotation=True,
                             max_noise_std=0.1,
                             max_noise_std_fa=0.03,
                             gamma_std=0.1,
@@ -360,10 +361,16 @@ def image_seg_generator_rgb(training_dir,
             # TODO: the -1 in the first coordinate (left-right) -1 is crucial
             # I wonder if (/hope!) it's the same for every FreeSurfer processed dataset
             v1[:, :, :, 0] = - v1[:, :, :, 0]
-            v1_rot = torch.zeros(v1.shape, device='cpu')
-            for row in range(3):
-                for col in range(3):
-                    v1_rot[:, :, :, row] = v1_rot[:, :, :, row] + Rinv[row, col] * v1[:, :, :, col]
+
+            if not nonlinear_rotation:
+                v1_rot = torch.zeros(v1.shape, device='cpu')
+                for row in range(3):
+                    for col in range(3):
+                        v1_rot[:, :, :, row] = v1_rot[:, :, :, row] + Rinv[row, col] * v1[:, :, :, col]
+            else:
+                Rinv = gen_non_linear_rotations([5] * 3, [nx, ny, nz], (rotation_bounds/360)*np.pi, Rinv=Rinv)
+                v1_rot = torch.matmul(Rinv, v1[..., None])[:, :, :, :, 0]
+                v1_rot /= (torch.sqrt(torch.sum(v1_rot * v1_rot, dim=-1, keepdim=True)) + 1e-6)
 
             xx2 = cx + s * (R[0, 0] * xc + R[0, 1] * yc + R[0, 2] * zc)
             yy2 = cy + s * (R[1, 0] * xc + R[1, 1] * yc + R[1, 2] * zc)
@@ -496,6 +503,7 @@ def image_seg_generator_rgb(training_dir,
             # dti = np.abs(v1 * fa[..., np.newaxis])
             # utils.save_volume(dti * 255, aff, None, '/tmp/dti.mgz')
             # utils.save_volume(dti_def * 255, aff, None, '/tmp/dti_def.mgz')
+            # utils.save_volume(dti_def / (fa_def[..., None] + 1e-6), aff, None, '/tmp/v1_def.mgz')
             # utils.save_volume(onehot, aff, None, '/tmp/onehot_def.mgz')
 
             list_images.append((torch.concat((t1_def[..., None], fa_def[..., None], dti_def), axis=-1)[None, ...]).detach().numpy())
@@ -537,7 +545,7 @@ def image_seg_generator_rgb_validation(training_dir,
     # Read directory to get list of training cases
     t1_list = glob.glob(training_dir + '/subject*/*.t1.nii.gz')
     n_training = len(t1_list)
-    print('Found %d cases for training' % n_training)
+    print('Found %d cases for validation' % n_training)
 
     # Get size from first volume
     aux, aff, _ = utils.load_volume(t1_list[0], im_only=False)
@@ -646,7 +654,7 @@ def image_seg_generator_rgb_validation(training_dir,
             # dti = np.abs(v1 * fa[..., np.newaxis])
             # utils.save_volume(dti * 255, aff, None, '/tmp/dti.mgz')
             # utils.save_volume(dti_def * 255, aff, None, '/tmp/dti_def.mgz')
-            # utils.save_volume(onehot, aff, None, '/tmp/onehot_def.mgz')
+            # utils.save_volume(onehot, aff, None, '/tmp/onehot_crop.mgz')
 
             list_images.append((torch.concat((t1_crop[..., None], fa_crop[..., None], dti_crop), dim=-1)[None, ...]).detach().numpy())
             list_label_maps.append((onehot[None, ...]).detach().numpy())
@@ -809,11 +817,55 @@ def encode_onehot(mapping, seg_def, label_list, seg_selection):
         onehot = eye[seg_def]
     else:
         seg_def = mapping[seg_def.long()]
+        seg_def_max = torch.max(seg_def, dim=-1)[0]
         eye = np.eye(len(label_list))
         eye = torch.tensor(eye, device='cpu')
-        onehot = eye[seg_def]
-        onehot = torch.sum(onehot, dim=3)
+        onehot = eye[seg_def_max]
+        # use max onehot to get background right then replace the thalamus with averaged
+        onehot[seg_def_max > 0, :] = torch.sum(eye[seg_def[seg_def_max > 0, :]], dim=-2)
         onehot /= torch.sum(onehot, dim=-1, keepdim=True)
 
 
     return onehot
+
+def gen_non_linear_rotations(seed_size, crop_size, rotation_sd, Rinv=None, device='cpu'):
+
+    rot_seed = (2 * rotation_sd * torch.rand(seed_size[0], seed_size[1], seed_size[2], 3, device=device)) - rotation_sd
+
+    sin_seed = torch.sin(rot_seed)
+    cos_seed = torch.cos(rot_seed)
+
+    Rx_seed = torch.zeros(seed_size[0], seed_size[1], seed_size[2], 3, 3,  device=device)
+    Rx_seed[..., 0, 0] = 1
+    Rx_seed[..., 1, 1] = cos_seed[..., 0]
+    Rx_seed[..., 1, 2] = -sin_seed[..., 0]
+    Rx_seed[..., 2, 1] = sin_seed[..., 0]
+    Rx_seed[..., 2, 2] = cos_seed[..., 0]
+
+    Ry_seed = torch.zeros(seed_size[0], seed_size[1], seed_size[2], 3, 3,  device=device)
+    Ry_seed[..., 1, 1] = 1
+    Ry_seed[..., 0, 0] = cos_seed[..., 1]
+    Ry_seed[..., 2, 0] = -sin_seed[..., 1]
+    Ry_seed[..., 0, 2] = sin_seed[..., 1]
+    Ry_seed[..., 2, 2] = cos_seed[..., 1]
+
+    Rz_seed = torch.zeros(seed_size[0], seed_size[1], seed_size[2], 3, 3,  device=device)
+    Rz_seed[..., 2, 2] = 1
+    Rz_seed[..., 0, 0] = cos_seed[..., 2]
+    Rz_seed[..., 0, 1] = -sin_seed[..., 2]
+    Rz_seed[..., 1, 0] = sin_seed[..., 2]
+    Rz_seed[..., 1, 1] = cos_seed[..., 2]
+
+    R_seed = torch.matmul(torch.matmul(Rx_seed, Ry_seed), Rz_seed)
+
+    if Rinv is not None:
+        R_seed = torch.matmul(R_seed, Rinv.detach().float())
+
+    R_nonLin = torch.nn.functional.interpolate(torch.permute(R_seed, (3, 4, 0, 1, 2)),
+                                               size=(crop_size[0], crop_size[1], crop_size[2]),
+                                               mode='trilinear',
+                                               align_corners=True)
+
+    R_nonLin = torch.permute(R_nonLin, (2, 3, 4, 0, 1))
+
+    return R_nonLin
