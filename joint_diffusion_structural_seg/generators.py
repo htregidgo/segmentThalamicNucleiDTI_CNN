@@ -248,6 +248,8 @@ def image_seg_generator_rgb(training_dir,
                             crop_size=None,
                             randomize_resolution=False,
                             diffusion_resolution=None,
+                            randomize_speckle=True,
+                            randomize_flip=True,
                             seg_selection='combined'):
 
     # check type of one-hot encoding
@@ -368,9 +370,7 @@ def image_seg_generator_rgb(training_dir,
                     for col in range(3):
                         v1_rot[:, :, :, row] = v1_rot[:, :, :, row] + Rinv[row, col] * v1[:, :, :, col]
             else:
-                Rinv = gen_non_linear_rotations([5] * 3, [nx, ny, nz], (rotation_bounds/360)*np.pi, Rinv=Rinv)
-                v1_rot = torch.matmul(Rinv, v1[..., None])[:, :, :, :, 0]
-                v1_rot /= (torch.sqrt(torch.sum(v1_rot * v1_rot, dim=-1, keepdim=True)) + 1e-6)
+                v1_rot = rotate_vector(Rinv, nx, ny, nz, rotation_bounds, v1)
 
             xx2 = cx + s * (R[0, 0] * xc + R[0, 1] * yc + R[0, 2] * zc)
             yy2 = cy + s * (R[1, 0] * xc + R[1, 1] * yc + R[1, 2] * zc)
@@ -455,21 +455,11 @@ def image_seg_generator_rgb(training_dir,
             # Augment intensities t1 and fa
             # Note that if you are downsampling, augmentation happens here at low resolution (as will happen at test time)
             t1_def = utils.augment_t1(t1_def, gamma_std, contrast_std, brightness_std, max_noise_std)
-            fa_def = torch.sqrt(torch.sum(dti_def * dti_def, axis=-1))
-            fa_aug = utils.augment_fa(fa_def, gamma_std, max_noise_std_fa)
-            factor = fa_aug / (1e-6 + fa_def)
-            dti_def = dti_def * factor[..., np.newaxis]
 
-            # Add some truly random DTI voxels
-            selector = np.random.rand(*factor.shape) > 0.9999
-            n_selected = np.sum(selector)
-            dti_def[selector, :] = torch.rand(n_selected, 3, dtype=dti_def.dtype)
-            fa_aug[selector] = 0.5+0.5*torch.rand(n_selected, dtype=fa_aug.dtype)
-            fa_def = torch.sqrt(torch.sum(dti_def * dti_def, dim=-1))
-            factor = fa_aug / (1e-6 + fa_def)
-            dti_def = dti_def * factor[..., np.newaxis]
-
-
+            if randomize_speckle:
+                dti_def, fa_def = speckle_dti_and_fa(dti_def, gamma_std, max_noise_std_fa)
+            else:
+                dti_def, fa_def = augment_dti_and_fa(dti_def, gamma_std, max_noise_std_fa)
 
             # Bring back to original resolution if needed
             if randomize_resolution:
@@ -482,14 +472,28 @@ def image_seg_generator_rgb(training_dir,
                 dti_def = myzoom_torch(dti_def, ratio)
                 fa_def = torch.sqrt(torch.sum(dti_def * dti_def, dim=-1))
 
-
-            # TODO: possible improvement: introduce left right flipping. You need to a) flip all the volumes, b) swap
-            # left and right labels in the flipped segmentation, c) change the sign of the flipped v1_def_rot[:, :, :, 0]
-
-
             # Efficiently turn label map into one hot encoded array
-
             onehot = encode_onehot(mapping, seg_def, label_list, seg_selection)
+
+            # introduce left right flipping. You need to
+            # a) flip all the volumes,
+            # b) swap left and right labels in the flipped segmentation,
+            # c) change the sign of the flipped v1_def_rot[:, :, :, 0]
+            #       (but the RGB takes the absolute, so we can skip this)
+            if randomize_flip:
+                test_flip = torch.rand(1)[0] > 0.5
+                if test_flip:
+                    t1_def = torch.flip(t1_def, [0])
+                    fa_def = torch.flip(fa_def, [0])
+                    dti_def = torch.flip(dti_def, [0])
+
+                    flip_idx = torch.cat((torch.zeros(1, dtype=torch.long),
+                                          torch.arange((len(label_list)+1)/2, len(label_list), dtype=torch.long),
+                                          torch.arange(1, (len(label_list)+1)/2, dtype=torch.long)), dim=0)
+
+                    onehot = torch.flip(onehot[..., flip_idx], [0])
+
+
 
             # If you want to save to disk and open with Freeview during debugging
             # from joint_diffusion_structural_seg.utils import save_volume
@@ -521,6 +525,7 @@ def image_seg_generator_rgb(training_dir,
             list_inputs = [item[0] for item in list_inputs]
 
         yield list_inputs
+
 
 
 def image_seg_generator_rgb_validation(training_dir,
@@ -808,6 +813,34 @@ def myzoom_torch(X, factor):
 
     return Y
 
+# noinspection PyTypeChecker
+def speckle_dti_and_fa(dti_def, gamma_std, max_noise_std_fa):
+
+    # Add some truly random DTI voxels
+    selector = torch.rand(*dti_def.shape[:3]) > 0.9999
+    n_selected = torch.sum(selector)
+    dti_def[selector, :] = torch.rand((n_selected, 3), dtype=dti_def.dtype)
+
+    fa_def = torch.sqrt(torch.sum(dti_def * dti_def, dim=-1))
+    fa_aug = utils.augment_fa(fa_def, gamma_std, max_noise_std_fa)
+    fa_aug[selector] = 0.5 + 0.5 * torch.rand(n_selected, dtype=fa_aug.dtype)
+
+    factor = fa_aug / (1e-6 + fa_def)
+    dti_def = dti_def * factor[..., None]
+
+    return dti_def, fa_def
+
+
+def augment_dti_and_fa(dti_def, gamma_std, max_noise_std_fa):
+    fa_def = torch.sqrt(torch.sum(dti_def * dti_def, dim=-1))
+    fa_aug = utils.augment_fa(fa_def, gamma_std, max_noise_std_fa)
+
+    factor = fa_aug / (1e-6 + fa_def)
+    dti_def = dti_def * factor[..., None]
+
+    return dti_def, fa_def
+
+
 def encode_onehot(mapping, seg_def, label_list, seg_selection):
 
     if seg_selection == 'single':
@@ -869,3 +902,39 @@ def gen_non_linear_rotations(seed_size, crop_size, rotation_sd, Rinv=None, devic
     R_nonLin = torch.permute(R_nonLin, (2, 3, 4, 0, 1))
 
     return R_nonLin
+
+def rotate_vector(Rinv, nx, ny, nz, rotation_bounds, v1):
+    Rinv = gen_non_linear_rotations([5] * 3, [nx, ny, nz], (rotation_bounds / 360) * np.pi, Rinv=Rinv)
+    v1_rot = torch.matmul(Rinv, v1[..., None])[:, :, :, :, 0]
+    v1_rot /= (torch.sqrt(torch.sum(v1_rot * v1_rot, dim=-1, keepdim=True)) + 1e-6)
+    return v1_rot
+
+def interp_onehot(label_list, onehot_in, thal_mask, xx2, yy2, zz2, cx, cy, cz):
+
+    idx, idy, idz = torch.nonzero(thal_mask>0,as_tuple=True)
+
+    i1 = torch.min(idx)
+    j1 = torch.min(idy)
+    k1 = torch.min(idz)
+    i2 = torch.max(idx)+1
+    j2 = torch.max(idy)+1
+    k2 = torch.max(idz)+1
+
+    xx3 = (xx2[i1:i2, j1:j2, k1:k2, None]/cx)-1
+    yy3 = (yy2[i1:i2, j1:j2, k1:k2, None]/cy)-1
+    zz3 = (zz2[i1:i2, j1:j2, k1:k2, None]/cz)-1
+
+    grid = torch.concat((zz3, yy3, xx3), dim=3)
+    grid = grid[None, ...]
+    grid = grid.detach().float()
+
+    onehot_interp = torch.nn.functional.grid_sample(torch.permute(onehot_in, (3, 0, 1, 2))[None, ...],
+                                                    grid, align_corners=True)
+
+    eye = torch.eye(len(label_list))
+    onehot_out = eye[torch.zeros_like(thal_mask, dtype=torch.long)]
+
+    onehot_out[i1:i2, j1:j2, k1:k2, :] = torch.permute(onehot_interp[0, ...], (1, 2, 3, 0))
+
+    return onehot_out
+
