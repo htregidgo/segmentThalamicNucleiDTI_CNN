@@ -548,7 +548,7 @@ def image_seg_generator_rgb_validation(training_dir,
         'seg_selection must be single or combined'
 
     # Read directory to get list of training cases
-    t1_list = glob.glob(training_dir + '/subject*/*.t1.nii.gz')
+    t1_list = sorted(glob.glob(training_dir + '/subject*/*.t1.nii.gz'))
     n_training = len(t1_list)
     print('Found %d cases for validation' % n_training)
 
@@ -590,7 +590,7 @@ def image_seg_generator_rgb_validation(training_dir,
             t1_file = t1_list[index]
             subject_path = os.path.split(t1_file)[0]
 
-            seg_list = glob.glob(subject_path + '/segs/*nii.gz')
+            seg_list = sorted(glob.glob(subject_path + '/segs/*nii.gz'))
 
             # either pick a single seg to train towards or import them all and average the onehot
             if seg_selection == 'single':
@@ -607,10 +607,9 @@ def image_seg_generator_rgb_validation(training_dir,
                     seg = torch.concat((seg, torch.tensor(np_seg[..., None], device='cpu')), dim=3)
 
 
-            fa_list = glob.glob(subject_path + '/dmri/*_fa.nii.gz')
-            fa_index = np.random.randint(len(fa_list))
+            fa_list = sorted(glob.glob(subject_path + '/dmri/*_fa.nii.gz'))
 
-            fa_file = fa_list[fa_index]
+            fa_file = fa_list[0]
             prefix = fa_file[:-10]
             v1_file = prefix + '_v1.nii.gz'
 
