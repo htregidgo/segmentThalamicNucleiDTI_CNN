@@ -191,6 +191,13 @@ def train_model(model,
 
     # fit
     if validation_generator is not None:
+        validation_freq = list(range(1,6))
+
+        for il in range(10, n_epochs, 5):
+            validation_freq.append(il)
+
+        validation_freq.append(n_epochs)
+
         model.fit_generator(generator,
                             epochs=n_epochs,
                             steps_per_epoch=n_steps,
@@ -199,7 +206,7 @@ def train_model(model,
                             use_multiprocessing=True,
                             validation_data=validation_generator,
                             validation_steps=60,
-                            validation_freq=5)
+                            validation_freq=validation_freq)
     else:
         model.fit_generator(generator,
                             epochs=n_epochs,
