@@ -11,8 +11,10 @@ import joint_diffusion_structural_seg.utils as utils
 
 henry_seg_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/raw_segs_from_Henry'
 fs_dir = '/autofs/space/panamint_005/users/iglesias/data/HCPlinked/'
-output_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data/'
-output_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
+# output_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data/'
+output_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_new/'
+# output_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
+output_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_new.npy'
 suffix = '_JointStructDTI_seg_final.nii.gz'
 W = 160
 

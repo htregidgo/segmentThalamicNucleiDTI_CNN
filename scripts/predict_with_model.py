@@ -18,7 +18,7 @@ from scipy import ndimage
 # different models etc  all with the same command
 
 
-if False:
+if True:
     # subject = 'subject_996782'
     subject = 'subject_101309'
     # fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/HCPlinked/'
@@ -29,7 +29,7 @@ elif False:
     subject = 'DRC_01_0335_08_03_1'
     fs_subject_dir = '/home/henry/Documents/Brain/DRC/DRCfreesurferThalamus'
     dataset = 'DRC'
-elif True:
+elif False:
     subject = 'subject_template'
     fs_subject_dir = '/home/henry/Documents/Brain/HCPDataset/HCP/'
     dataset = 'template'
@@ -40,21 +40,24 @@ else:
     # fs_subject_dir = '/autofs/space/panamint_005/users/iglesias/data/ADNIdiffusionLinked/'
     dataset = 'ADNI'
 # path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
-path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list.npy'
+# path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list.npy'
+path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_reduced.npy'
 # model_file = '/autofs/homes/002/iglesias/python/code/joint_diffusion_structural_seg/models/base_model.h5'
 # model_file = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThaldebug/dice_011.h5'
 # model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_newTrainingSet/dice_001.h5'
 # model_file = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLoss/dice_002.h5'
 # model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_pytorch/dice_006.h5'
-model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_deformation_fromScratch_speckle/dice_057.h5'
+# model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_deformation_fromScratch_speckle/dice_057.h5'
+# model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_mixedOnehot2/dice_035.h5'
+model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_reducedLabels/dice_050.h5'
 resolution_model_file = 0.7
 generator_mode = 'rgb' # rgb or Must be the same as in training
 
 if not os.path.exists(os.path.join(fs_subject_dir, subject, 'results')):
     os.mkdir(os.path.join(fs_subject_dir, subject, 'results'))
 
-output_seg_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_speckle_fill.seg.mgz')
-output_vol_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_speckle_fill.vol.npy')
+output_seg_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_reduced_randV1_e050.seg.mgz')
+output_vol_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_reduced_randV1_e050.vol.npy')
 
 ##########################################################################################
 
