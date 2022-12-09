@@ -5,13 +5,8 @@ import torch
 
 from joint_diffusion_structural_seg import utils
 
-def randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, nx, ny, nz):
+def randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, cropx, cropy, cropz):
 
-
-    # get cropping
-    cropx = np.random.randint(0, nx - crop_size[0] + 1, 1)[0]
-    cropy = np.random.randint(0, ny - crop_size[1] + 1, 1)[0]
-    cropz = np.random.randint(0, nz - crop_size[2] + 1, 1)[0]
 
     centre = torch.tensor((cx, cy, cz))
 
@@ -96,10 +91,10 @@ def resmple_dti(fa, v1, displacement, R_reorient):
     c0 = c00 * wfy[..., None] + c10 * wcy[..., None]
     c1 = c01 * wfy[..., None] + c11 * wcy[..., None]
 
-    # c = c0 * wfz[..., None] + c1 * wcz[..., None]
+    c = c0 * wfz[..., None] + c1 * wcz[..., None]
 
-    dti_def = torch.zeros(*v1.shape, device='cpu')
+    dti_def = torch.zeros(*displacement.shape, device='cpu')
 
-    dti_def[ok[..., None]] = c0 * wfz[..., None] + c1 * wcz[..., None]
+    dti_def.masked_scatter_(ok[..., None], c.float())
 
     return dti_def
