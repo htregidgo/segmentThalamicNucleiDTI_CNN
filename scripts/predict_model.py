@@ -46,4 +46,4 @@ predict(subject_list,
             nb_conv_per_level,
             activation,
             bounding_box_width,
-            aff_ref):
+            aff_ref)
