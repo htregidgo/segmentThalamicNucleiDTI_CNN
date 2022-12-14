@@ -224,7 +224,3 @@ np.save(output_vol_file, vols_in_mm3)
 print('freeview ' + t1_file + ' ' + fa_file + ' '  + output_seg_file)
 
 print('All done!')
-
-
-
-
