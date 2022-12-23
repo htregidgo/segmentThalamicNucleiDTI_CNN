@@ -5,19 +5,43 @@ import torch
 
 from joint_diffusion_structural_seg import utils
 
-def randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, cropx, cropy, cropz):
+def randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, cropx, cropy, cropz,
+                          flag_deformation=True, deformation_max=5.0, t1_resolution=np.array([0.7]*3)):
 
 
     centre = torch.tensor((cx, cy, cz))
 
     # get rotation displacement
-    displacement = torch.cat((xc[..., None], yc[..., None], zc[..., None]), dim=-1)
-    displacement = s * torch.matmul(R, displacement[..., None])[..., 0]
-    displacement = centre[None, None, None, :] + displacement
+    displacement_full = torch.matmul(R,(torch.cat((xc[..., None], yc[..., None], zc[..., None]), dim=-1))[..., None])[..., 0]
+    displacement_full *= s
+    displacement_full += centre[None, None, None, :]
 
-    displacement = displacement[cropx:cropx+crop_size[0]+1,
+    displacement = displacement_full[cropx:cropx+crop_size[0]+1,
                                 cropy:cropy+crop_size[1]+1,
                                 cropz:cropz+crop_size[2]+1, :]
+
+    if flag_deformation:
+        # Add trilinear spline deformation
+        n_defNodes = 5
+        def_basis_size = np.array([n_defNodes] * 3)
+        basis_dist = np.array(s) * (np.array(crop_size) - 1.) / (def_basis_size - 1.)
+
+        deformation_max_vox = deformation_max / t1_resolution
+        def_basis_seed = np.random.rand(3, def_basis_size[0], def_basis_size[1], def_basis_size[2])
+
+        replace_def_max = deformation_max_vox > (basis_dist / 3.)
+        deformation_max_vox[replace_def_max] = basis_dist[replace_def_max] / 3.
+
+        def_basis = 2 * deformation_max_vox[:, None, None, None] * (def_basis_seed - 0.5)
+
+        def_basis = torch.tensor(def_basis[None, ...], device='cpu')
+
+        def_array = torch.nn.functional.interpolate(def_basis,
+                                                    size=(crop_size[0]+1, crop_size[1]+1, crop_size[2]+1),
+                                                    mode='trilinear',
+                                                    align_corners=True)
+
+        displacement += def_array[0,...].permute((1,2,3,0))
 
     left = slice(0, -1)
     right = slice(1, None)
@@ -29,7 +53,7 @@ def randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, cropx
     jacobian[..., 1] = displacement[left, right, left, :] - displacement[left, left, left, :]
     jacobian[..., 2] = displacement[left, left, right, :] - displacement[left, left, left, :]
 
-    displacement = displacement[left, left, left]
+    displacement_out = displacement[left, left, left]
 
     # rotation is U * Vh where U and V are the singular vector matrices
     U, Vh = torch.linalg.svd(jacobian)[slice(0, None, 2)]
@@ -37,11 +61,11 @@ def randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, cropx
     # use transpose as we're using displacement from target to source
     R_reorient = torch.transpose(torch.matmul(U, Vh), -1, -2)
 
-    dti_def = resmple_dti(fa, v1, displacement, R_reorient)
+    dti_def = resmple_dti(fa, v1, displacement_out, R_reorient)
 
-    xx2 = displacement[..., 0]
-    yy2 = displacement[..., 1]
-    zz2 = displacement[..., 2]
+    xx2 = displacement_out[..., 0]
+    yy2 = displacement_out[..., 1]
+    zz2 = displacement_out[..., 2]
 
 
     return dti_def, xx2, yy2, zz2

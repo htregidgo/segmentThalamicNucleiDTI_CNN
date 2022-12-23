@@ -5,6 +5,7 @@ from joint_diffusion_structural_seg import utils
 from scipy.interpolate import RegularGridInterpolator as rgi
 from scipy.ndimage import gaussian_filter as gauss_filt
 import torch
+from joint_diffusion_structural_seg import dtiutils
 
 # This is the first generator I tried, deforming the FA linearly and the direction with nearest neighbors
 # TODO: right now it takes 3.5 seconds on my machine... not great, not terrible
@@ -250,7 +251,9 @@ def image_seg_generator_rgb(training_dir,
                             diffusion_resolution=None,
                             randomize_speckle=True,
                             randomize_flip=True,
-                            seg_selection='combined'):
+                            seg_selection='combined',
+                            flag_deformation=True,
+                            deformation_max = 5.0):
 
     # check type of one-hot encoding
     assert (seg_selection == 'single') or (seg_selection == 'combined'),\
@@ -271,7 +274,7 @@ def image_seg_generator_rgb(training_dir,
         crop_size = [crop_size] *3
 
     # Create meshgrid (we will reuse a lot)
-    xx, yy, zz = np.meshgrid(range(nx), range(ny), range(nz), sparse=False, indexing='ij')
+    xx, yy, zz = np.meshgrid(range(nx+1), range(ny+1), range(nz+1), sparse=False, indexing='ij')
     cx, cy, cz = (np.array(aux.shape) - 1) / 2
     xc = xx - cx
     yc = yy - cy
@@ -364,54 +367,46 @@ def image_seg_generator_rgb(training_dir,
             # I wonder if (/hope!) it's the same for every FreeSurfer processed dataset
             v1[:, :, :, 0] = - v1[:, :, :, 0]
 
-            if not nonlinear_rotation:
-                v1_rot = torch.zeros(v1.shape, device='cpu')
-                for row in range(3):
-                    for col in range(3):
-                        v1_rot[:, :, :, row] = v1_rot[:, :, :, row] + Rinv[row, col] * v1[:, :, :, col]
+            if not flag_deformation:
+                if not nonlinear_rotation:
+                    v1_rot = torch.zeros(v1.shape, device='cpu')
+                    for row in range(3):
+                        for col in range(3):
+                            v1_rot[:, :, :, row] = v1_rot[:, :, :, row] + Rinv[row, col] * v1[:, :, :, col]
+                else:
+                    v1_rot = rotate_vector(Rinv, nx, ny, nz, rotation_bounds, v1)
+
+                xx2 = cx + s * (R[0, 0] * xc + R[0, 1] * yc + R[0, 2] * zc)
+                yy2 = cy + s * (R[1, 0] * xc + R[1, 1] * yc + R[1, 2] * zc)
+                zz2 = cz + s * (R[2, 0] * xc + R[2, 1] * yc + R[2, 2] * zc)
+
+                # We use the rotated v1 to create the RGB (DTI) volume and then forget about V1 / nearest neighbor interpolation
+                dti = np.abs(v1_rot * fa[..., np.newaxis])
+
+                # Interpolate!  There is no need to interpolate everywhere; only in the area we will (randomly) crop
+                # Essentially, we crop and interpolate at the same time
+                xx2 = xx2[cropx:cropx + crop_size[0], cropy:cropy + crop_size[1], cropz:cropz + crop_size[2]]
+                yy2 = yy2[cropx:cropx + crop_size[0], cropy:cropy + crop_size[1], cropz:cropz + crop_size[2]]
+                zz2 = zz2[cropx:cropx + crop_size[0], cropy:cropy + crop_size[1], cropz:cropz + crop_size[2]]
+
+                combo = torch.concat((t1[..., None], dti), dim=-1)
+                combo_def = fast_3D_interp_torch(combo, xx2, yy2, zz2, 'linear')
+                t1_def = combo_def[:, :, :, 0]
+                dti_def = combo_def[:, :, :, 1:]
+
             else:
-                v1_rot = rotate_vector(Rinv, nx, ny, nz, rotation_bounds, v1)
+                # maximum displacement from scaled rigid rotation (in mm)
 
-            xx2 = cx + s * (R[0, 0] * xc + R[0, 1] * yc + R[0, 2] * zc)
-            yy2 = cy + s * (R[1, 0] * xc + R[1, 1] * yc + R[1, 2] * zc)
-            zz2 = cz + s * (R[2, 0] * xc + R[2, 1] * yc + R[2, 2] * zc)
 
-            # We use the rotated v1 to create the RGB (DTI) volume and then forget about V1 / nearest neighbor interpolation
-            dti = np.abs(v1_rot * fa[..., np.newaxis])
+                # This function generates the cropped x, y and z interpolation coordinates and resamples the correctly
+                # reoriented dti in rgb space
+                dti_def, xx2, yy2, zz2 = dtiutils.randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size,
+                                                                        cropx, cropy, cropz,flag_deformation,
+                                                                        deformation_max, t1_resolution)
 
-            # Interpolate!  There is no need to interpolate everywhere; only in the area we will (randomly) crop
-            # Essentially, we crop and interpolate at the same time
-            xx2 = xx2[cropx:cropx+crop_size[0], cropy:cropy+crop_size[1], cropz:cropz+crop_size[2]]
-            yy2 = yy2[cropx:cropx + crop_size[0], cropy:cropy + crop_size[1], cropz:cropz + crop_size[2]]
-            zz2 = zz2[cropx:cropx + crop_size[0], cropy:cropy + crop_size[1], cropz:cropz + crop_size[2]]
+                t1_def = fast_3D_interp_torch(t1, xx2, yy2, zz2, 'linear')
 
-            # Add trilinear spline deformation
-            def_basis_size = np.array([5] * 3)
-            basis_dist = (np.array(crop_size) - 1.) / (def_basis_size - 1.)
-            deformation_max = 5.0
-            deformation_max = deformation_max / t1_resolution
-            def_basis_seed = np.random.rand(3, def_basis_size[0], def_basis_size[1], def_basis_size[2])
-
-            replace_def_max = deformation_max > (basis_dist / 3.)
-            deformation_max[replace_def_max] = basis_dist[replace_def_max] / 3.
-
-            def_basis = 2 * deformation_max[:, None, None, None] * (def_basis_seed - 0.5)
-
-            def_basis = torch.tensor(def_basis[None, ...], device='cpu')
-
-            def_array = torch.nn.functional.interpolate(def_basis,
-                                                        size=(crop_size[0], crop_size[1], crop_size[2]),
-                                                        mode='trilinear',
-                                                        align_corners=True)
-
-            xx2 = xx2 + def_array[0, 0, ...]
-            yy2 = yy2 + def_array[0, 1, ...]
-            zz2 = zz2 + def_array[0, 2, ...]
-
-            combo = torch.concat( (t1[...,None], dti), dim=-1 )
-            combo_def = fast_3D_interp_torch(combo, xx2, yy2, zz2, 'linear')
-            t1_def = combo_def[:, :, :, 0]
-            dti_def = combo_def[:, :, :, 1:]
+            # interpolate the segmentation
             seg_def = fast_3D_interp_torch(seg, xx2, yy2, zz2, 'nearest')
 
             # Randomization of resolution increases running time by 0.5-1.0 seconds, which is not terrible...

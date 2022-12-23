@@ -125,10 +125,10 @@ def image_seg_generator_rgb_rotationtest(training_dir,
             rotations = (2 * rotation_bounds * np.random.rand(3) - rotation_bounds) / 180.0 * np.pi
             s = torch.tensor(1 + (2 * scaling_bounds * np.random.rand(1) - scaling_bounds), device='cpu')
 
-            s=1
-            rotations[0]=0
-            rotations[1]=0
-            rotations[2]=np.pi/2
+            # s=1
+            # rotations[0]=0
+            # rotations[1]=0
+            # rotations[2]=np.pi/2
 
             cropx = np.random.randint(0, nx - crop_size[0] + 1, 1)[0]
             cropy = np.random.randint(0, ny - crop_size[1] + 1, 1)[0]
@@ -176,16 +176,16 @@ def image_seg_generator_rgb_rotationtest(training_dir,
 
             # If you want to save to disk and open with Freeview during debugging
             from joint_diffusion_structural_seg.utils import save_volume
-            utils.save_volume(t1, aff, None, '/tmp/t1.mgz')
-            utils.save_volume(t1_def, aff, None, '/tmp/t1_def.mgz')
-            utils.save_volume(fa, aff, None, '/tmp/fa.mgz')
-            utils.save_volume(fa_def, aff, None, '/tmp/fa_def.mgz')
-            utils.save_volume(fa_def2, aff, None, '/tmp/fa_def2.mgz')
+            # utils.save_volume(t1, aff, None, '/tmp/t1.mgz')
+            # utils.save_volume(t1_def, aff, None, '/tmp/t1_def.mgz')
+            # utils.save_volume(fa, aff, None, '/tmp/fa.mgz')
+            # utils.save_volume(fa_def, aff, None, '/tmp/fa_def.mgz')
+            # utils.save_volume(fa_def2, aff, None, '/tmp/fa_def2.mgz')
             # utils.save_volume(seg, aff, None, '/tmp/seg.mgz')
             # utils.save_volume(seg_def, aff, None, '/tmp/seg_def.mgz')
-            utils.save_volume(v1, aff, None, '/tmp/v1.mgz')
-            utils.save_volume(v1_def, aff, None, '/tmp/v1_def.mgz')
-            utils.save_volume(v1_def2, aff, None, '/tmp/v1_def2.mgz')
+            # utils.save_volume(v1, aff, None, '/tmp/v1.mgz')
+            # utils.save_volume(v1_def, aff, None, '/tmp/v1_def.mgz')
+            # utils.save_volume(v1_def2, aff, None, '/tmp/v1_def2.mgz')
             # dti = np.abs(v1 * fa[..., np.newaxis])
             # utils.save_volume(dti * 255, aff, None, '/tmp/dti.mgz')
             # utils.save_volume(dti_def * 255, aff, None, '/tmp/dti_def.mgz')
