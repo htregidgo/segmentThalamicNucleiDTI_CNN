@@ -9,14 +9,21 @@ from joint_diffusion_structural_seg.generators import image_seg_generator, image
 #training_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data/'
 # training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_withValidation/train/'
 # validation_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_withValidation/validate/'
-training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_reduced/train/'
-validation_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_reduced/validate/'
+# training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_reduced/train/'
+# validation_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_reduced/validate/'
+training_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced/train/'
+validation_dir = None
 # validation_dir = None
 # NPY file with list of labels
 # path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list.npy'
-path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_reduced.npy'
-# Directory where model files will be writte
-model_dir = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_pytorchmixed/'
+# path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_reduced.npy'
+path_label_list = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced/proc_training_data_label_list_reduced.npy'
+# Directory where model files will be written
+# model_dir = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThaldebug/'
+model_dir = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_new_year_run'
+# NPY file with segmentation of channels into groups
+# path_group_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_group_seg.npy'
+path_group_list = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced/proc_training_group_seg_reduced.npy'
 # Batch size being volumes, it will probably be always 1...
 batchsize = 1
 # Size to which inputs will be cropped (use None to use whole volume)
