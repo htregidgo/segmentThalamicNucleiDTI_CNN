@@ -12,7 +12,7 @@ validation_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_redu
 path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_reduced.npy'
 # Directory where model files will be written
 # model_dir = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThaldebug/'
-model_dir = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_reducedLabels'
+model_dir = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_reducedLabels_l2test'
 # NPY file with segmentation of channels into groups
 # path_group_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_group_seg.npy'
 path_group_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_group_seg_reduced.npy'

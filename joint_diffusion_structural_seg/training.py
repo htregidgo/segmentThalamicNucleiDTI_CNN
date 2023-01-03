@@ -163,6 +163,7 @@ def train_model(model,
     # model saving callback
     save_file_name = os.path.join(model_dir, '%s_{epoch:03d}.h5' % metric_type)
     callbacks = [KC.ModelCheckpoint(save_file_name, verbose=1)]
+    # callbacks = [KC.ModelCheckpoint(save_file_name, verbose=1, period=5)]
 
     # TensorBoard callback
     if metric_type == 'dice':
