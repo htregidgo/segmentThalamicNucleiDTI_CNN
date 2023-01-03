@@ -11,13 +11,15 @@ import numpy as np
 import joint_diffusion_structural_seg.utils as utils
 import glob
 
-henry_seg_dir = '/home/henry/Documents/Brain/ThalamicNuclei/HTtestdata'
-fs_dir = '/home/henry/Documents/Brain/HCPDataset/HCP/'
+# henry_seg_dir = '/home/henry/Documents/Brain/ThalamicNuclei/HTtestdata'
+henry_seg_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/henry/'
+# fs_dir = '/home/henry/Documents/Brain/HCPDataset/HCP/'
+fs_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/henry/'
 # output_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data/'
-output_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_new_wrongseg/'
+output_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/training_source/'
 # output_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
-output_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_new.npy'
-suffix = '_JointStructDTI_seg_final.nii.gz'
+output_label_list = '/media/henry/_localstore/Brain/synthDTI/large_download/proc_training_data_label_list_new.npy'
+suffix = '_JointStructDTI_smoothed_seg_final.nii.gz'
 W = 160
 
 # Create output directory if needed
@@ -28,7 +30,7 @@ if not os.path.exists(output_dir):
 label_list = None
 
 result_suffix = '/results/EM'
-subject_list = glob.glob(henry_seg_dir + '/subject*' + result_suffix + '/DSW*dti1k*')
+subject_list = glob.glob(henry_seg_dir + '/subject*' + result_suffix + '/DSW*1k*joint')
 
 
 # Loop over files
@@ -48,9 +50,9 @@ for folder in subject_list:
         if not os.path.exists(os.path.join(subject_out_dir, 'segs')):
             os.mkdir(os.path.join(subject_out_dir, 'segs'))
 
-        seg_file_list_1K = glob.glob(em_folder + '/*dti1k*/*' + suffix)
-        seg_file_list_2K = glob.glob(em_folder + '/*dti2k*/*' + suffix)
-        t1_file = os.path.join(fs_dir, subject, 'mri','T1w_hires.masked.norm.mgz')
+        seg_file_list_1K = glob.glob(em_folder + '/*1k*joint/*' + suffix)
+        seg_file_list_2K = glob.glob(em_folder + '/*2k*joint/*' + suffix)
+        t1_file = os.path.join(fs_dir, subject, 'mri','T1w_hires.norm.mgz')
         aseg_file = os.path.join(fs_dir, subject, 'mri','aseg.mgz')
 
         # log_tensor_file_123k = os.path.join(fs_dir, subject, 'dmri', 'cleaned', subject + '_LogTensorsElems_hr.mgz')
