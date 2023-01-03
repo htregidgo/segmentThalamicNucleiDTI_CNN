@@ -400,7 +400,7 @@ def image_seg_generator_rgb(training_dir,
 
                 # This function generates the cropped x, y and z interpolation coordinates and resamples the correctly
                 # reoriented dti in rgb space
-                dti_def, xx2, yy2, zz2 = dtiutils.randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size,
+                dti_def, xx2, yy2, zz2 = dtiutils.randomly_resample_dti_PPD(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size,
                                                                         cropx, cropy, cropz,flag_deformation,
                                                                         deformation_max, t1_resolution)
 
