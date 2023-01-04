@@ -220,30 +220,30 @@ def resmple_dti_PPD(fa, v1, displacement, F_reorient):
 
 
     left_sample =torch.lu_solve(v1[fx, fy, fz, :, None],*F_factor)[..., 0]
-    left_sample /= torch.linalg.norm(left_sample,dim=1)[...,None]
+    left_sample /= torch.linalg.norm(left_sample,dim=1)[...,None] +1.0e-10
     right_sample=torch.lu_solve(v1[cx, fy, fz, :, None],*F_factor)[..., 0]
-    right_sample /= torch.linalg.norm(right_sample,dim=1)[...,None]
+    right_sample /= torch.linalg.norm(right_sample,dim=1)[...,None] +1.0e-10
     c00 = (wfx[..., None] * (fa[fx, fy, fz])[..., None]) * torch.abs(left_sample) \
           + (wcx[..., None] * (fa[cx, fy, fz])[..., None]) * torch.abs(right_sample)
 
     left_sample = torch.lu_solve(v1[fx, fy, cz, :, None],*F_factor)[..., 0]
-    left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None]
+    left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None] +1.0e-10
     right_sample = torch.lu_solve(v1[cx, fy, cz, :, None],*F_factor)[..., 0]
-    right_sample /= torch.linalg.norm(right_sample, dim=1)[..., None]
+    right_sample /= torch.linalg.norm(right_sample, dim=1)[..., None] +1.0e-10
     c01 = (wfx[..., None] * (fa[fx, fy, cz])[..., None]) * torch.abs(left_sample) \
           + (wcx[..., None] * (fa[cx, fy, cz])[..., None]) * torch.abs(right_sample)
 
     left_sample = torch.lu_solve(v1[fx, cy, fz, :, None],*F_factor)[..., 0]
-    left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None]
+    left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None] +1.0e-10
     right_sample = torch.lu_solve(v1[cx, cy, fz, :, None],*F_factor)[..., 0]
-    right_sample /= torch.linalg.norm(right_sample, dim=1)[..., None]
+    right_sample /= torch.linalg.norm(right_sample, dim=1)[..., None] +1.0e-10
     c10 = (wfx[..., None] * (fa[fx, cy, fz])[..., None]) * torch.abs(left_sample) \
           + (wcx[..., None] * (fa[cx, cy, fz])[..., None]) * torch.abs(right_sample)
 
     left_sample = torch.lu_solve(v1[fx, cy, cz, :, None],*F_factor)[..., 0]
-    left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None]
+    left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None] +1.0e-10
     right_sample = torch.lu_solve(v1[cx, cy, cz, :, None],*F_factor)[..., 0]
-    right_sample /= torch.linalg.norm(right_sample, dim=1)[..., None]
+    right_sample /= torch.linalg.norm(right_sample, dim=1)[..., None] +1.0e-10
     c11 = (wfx[..., None] * (fa[fx, cy, cz])[..., None]) * torch.abs(left_sample) \
           + (wcx[..., None] * (fa[cx, cy, cz])[..., None]) * torch.abs(right_sample)
 
