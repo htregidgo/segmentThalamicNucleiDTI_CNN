@@ -249,7 +249,7 @@ def image_seg_generator_rgb(training_dir,
                             crop_size=None,
                             randomize_resolution=False,
                             diffusion_resolution=None,
-                            randomize_speckle=True,
+                            speckle_frac_selected=1e-4,
                             randomize_flip=True,
                             seg_selection='combined',
                             flag_deformation=True,
@@ -258,6 +258,13 @@ def image_seg_generator_rgb(training_dir,
     # check type of one-hot encoding
     assert (seg_selection == 'single') or (seg_selection == 'combined'),\
         'seg_selection must be single or combined'
+
+    # check speckle fraction is in range
+    assert (speckle_frac_selected<1) and (speckle_frac_selected>=0),\
+        'fraction of DTI voxels randomised must be between 0 and 1'
+
+    # only perform speckle when selection fraction is greater than 0
+    randomize_speckle = speckle_frac_selected>0
 
     # Read directory to get list of training cases
     t1_list = glob.glob(training_dir + '/subject*/*.t1.nii.gz')
@@ -452,7 +459,8 @@ def image_seg_generator_rgb(training_dir,
             t1_def = utils.augment_t1(t1_def, gamma_std, contrast_std, brightness_std, max_noise_std)
 
             if randomize_speckle:
-                dti_def, fa_def = speckle_dti_and_fa(dti_def, gamma_std, max_noise_std_fa)
+                dti_def, fa_def = speckle_dti_and_fa(dti_def, gamma_std, max_noise_std_fa,
+                                                     speckle_frac_selected)
             else:
                 dti_def, fa_def = augment_dti_and_fa(dti_def, gamma_std, max_noise_std_fa)
 
@@ -808,15 +816,19 @@ def myzoom_torch(X, factor):
     return Y
 
 # noinspection PyTypeChecker
-def speckle_dti_and_fa(dti_def, gamma_std, max_noise_std_fa):
+def speckle_dti_and_fa(dti_def, gamma_std, max_noise_std_fa, speckle_frac_selected=0.0001):
 
     # Add some truly random DTI voxels
-    selector = torch.rand(*dti_def.shape[:3]) > 0.9999
+    selector = torch.rand(*dti_def.shape[:3]) > (1-speckle_frac_selected)
     n_selected = torch.sum(selector)
+    # Randomise direction in selection
     dti_def[selector, :] = torch.rand((n_selected, 3), dtype=dti_def.dtype)
 
+    # Gamma augmentation of the fa
     fa_def = torch.sqrt(torch.sum(dti_def * dti_def, dim=-1))
     fa_aug = utils.augment_fa(fa_def, gamma_std, max_noise_std_fa)
+
+    # Replace speckle voxel FAs with higher values (often higher for voxels where the DTI model fails)
     fa_aug[selector] = 0.5 + 0.5 * torch.rand(n_selected, dtype=fa_aug.dtype)
 
     factor = fa_aug / (1e-6 + fa_def)

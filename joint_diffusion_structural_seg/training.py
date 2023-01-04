@@ -24,6 +24,7 @@ def train(training_dir,
              randomize_resolution=False,
              generator_mode='rgb',
              diffusion_resolution=None,
+             speckle_frac_selected=1e-4,
              n_levels=5,
              nb_conv_per_level=2,
              conv_size=3,
@@ -62,7 +63,8 @@ def train(training_dir,
                                 brightness_std=brightness_std,
                                 crop_size=crop_size,
                                 randomize_resolution=randomize_resolution,
-                                diffusion_resolution=diffusion_resolution)
+                                diffusion_resolution=diffusion_resolution,
+                                speckle_frac_selected=speckle_frac_selected)
     else:
         generator = image_seg_generator(training_dir,
                                 path_label_list,

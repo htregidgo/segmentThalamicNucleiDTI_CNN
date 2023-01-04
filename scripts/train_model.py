@@ -40,6 +40,8 @@ generator_mode = 'rgb'
 # generator_mode = 'fa_v1'
 # Resolution of diffusion data (only needed if randomizing resolution; we use it to compute width of blurring kernels)
 diffusion_resolution = 1.25
+# Fraction of DTI voxels to randomise
+speckle_frac_selected=1e-4
 # Number of levels in Unet (5 is good)
 n_levels = 5
 # Number of convolution + nonlinearity blocks per level (2 is good)
@@ -89,6 +91,7 @@ train(training_dir,
              randomize_resolution=randomize_resolution,
              generator_mode=generator_mode,
              diffusion_resolution=diffusion_resolution,
+             speckle_frac_selected=speckle_frac_selected,
              n_levels=n_levels,
              nb_conv_per_level=nb_conv_per_level,
              conv_size=conv_size,

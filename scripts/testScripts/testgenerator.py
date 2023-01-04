@@ -43,6 +43,8 @@ contrast_std = 0.1
 brightness_std = 0.1
 # Randomize resolution during training?
 randomize_resolution = True
+# Fraction of DTI voxels to randomise
+speckle_frac_selected=1e-4
 # Mode of the generator. Must be fa_v1 (linear interpolation of fa, nearest of v1) or rgb (linear on rgb)
 generator_mode = 'rgb'
 # generator_mode = 'fa_v1'
@@ -93,7 +95,8 @@ generator = image_seg_generator_rgb(training_dir,
                                 brightness_std=brightness_std,
                                 crop_size=crop_size,
                                 randomize_resolution=randomize_resolution,
-                                diffusion_resolution=diffusion_resolution)
+                                diffusion_resolution=diffusion_resolution,
+                                speckle_frac_selected=speckle_frac_selected)
 
 next(generator)
 start = time.time()
