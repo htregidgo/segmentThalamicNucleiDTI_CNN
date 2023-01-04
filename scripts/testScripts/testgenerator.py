@@ -47,6 +47,10 @@ brightness_std = 0.1
 randomize_resolution = True
 # Fraction of DTI voxels to randomise
 speckle_frac_selected=1e-4
+# Will we deform the vollumes with piecewise linear displacement fields
+flag_deformation = True
+# Maximimum piecewise linear displacement in mm (excluding rotation + scaling)
+deformation_max = 5.0
 # Mode of the generator. Must be fa_v1 (linear interpolation of fa, nearest of v1) or rgb (linear on rgb)
 generator_mode = 'rgb'
 # generator_mode = 'fa_v1'
@@ -99,7 +103,9 @@ generator = image_seg_generator_rgb(training_dir,
                                 crop_size=crop_size,
                                 randomize_resolution=randomize_resolution,
                                 diffusion_resolution=diffusion_resolution,
-                                speckle_frac_selected=speckle_frac_selected)
+                                speckle_frac_selected=speckle_frac_selected,
+                                flag_deformation=flag_deformation,
+                                deformation_max=deformation_max)
 
 next(generator)
 start = time.time()

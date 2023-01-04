@@ -44,6 +44,10 @@ generator_mode = 'rgb'
 diffusion_resolution = 1.25
 # Fraction of DTI voxels to randomise
 speckle_frac_selected=1e-4
+# Will we deform the vollumes with piecewise linear displacement fields
+flag_deformation = True
+# Maximimum piecewise linear displacement in mm (excluding rotation + scaling)
+deformation_max = 5.0
 # Number of levels in Unet (5 is good)
 n_levels = 5
 # Number of convolution + nonlinearity blocks per level (2 is good)
@@ -95,6 +99,8 @@ train(training_dir,
              generator_mode=generator_mode,
              diffusion_resolution=diffusion_resolution,
              speckle_frac_selected=speckle_frac_selected,
+             flag_deformation=flag_deformation,
+             deformation_max=deformation_max,
              n_levels=n_levels,
              nb_conv_per_level=nb_conv_per_level,
              conv_size=conv_size,
