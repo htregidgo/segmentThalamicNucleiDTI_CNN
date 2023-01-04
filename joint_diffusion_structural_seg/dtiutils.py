@@ -73,8 +73,8 @@ def randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, cropx
 
 
 def randomly_resample_dti_PPD(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, cropx, cropy, cropz,
-                          flag_deformation=True, deformation_max=5.0, t1_resolution=np.array([0.7]*3)):
-
+                          flag_deformation=True, deformation_max=5.0, t1_resolution=np.array([0.7]*3),
+                          nonlinear_rotation=False, rotation_bounds=None):
 
     centre = torch.tensor((cx, cy, cz))
 
@@ -122,7 +122,12 @@ def randomly_resample_dti_PPD(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, c
 
     displacement_out = displacement[left, left, left]
 
-    dti_def = resmple_dti_PPD(fa, v1, displacement_out, jacobian)
+    if not nonlinear_rotation:
+        dti_def = resmple_dti_PPD(fa, v1, displacement_out, jacobian)
+    else:
+        nx, ny, nz = v1.shape[slice(0,3)]
+        v1_rot = rotate_vector(None, nx, ny, nz, rotation_bounds, v1)
+        dti_def = resmple_dti_PPD(fa, v1_rot, displacement_out, jacobian)
 
     xx2 = displacement_out[..., 0]
     yy2 = displacement_out[..., 1]
@@ -259,5 +264,58 @@ def resmple_dti_PPD(fa, v1, displacement, F_reorient):
     dti_def.masked_scatter_(ok[..., None], c.float())
 
     return dti_def
+
+# Apply a approximate rotation matrices to each DTI voxel
+def rotate_vector(Rinv, nx, ny, nz, rotation_bounds, v1):
+    Rinv_nl = gen_non_linear_rotations([5] * 3, [nx, ny, nz], (rotation_bounds / 360) * np.pi, Rinv=Rinv)
+    v1_rot = torch.matmul(Rinv_nl, v1[..., None])[:, :, :, :, 0]
+    v1_rot /= (torch.sqrt(torch.sum(v1_rot * v1_rot, dim=-1, keepdim=True)) + 1e-6)
+    return v1_rot
+
+# Generate interpolated rotation matrices for every voxel in an image grid.
+# Matrices won't be guaranteed orthonormal but should be close allowing rotation of the DTI vectors.
+def gen_non_linear_rotations(seed_size, crop_size, rotation_sd, Rinv=None, device='cpu'):
+
+    rot_seed = (2 * rotation_sd * torch.rand(seed_size[0], seed_size[1], seed_size[2], 3, device=device)) - rotation_sd
+
+    sin_seed = torch.sin(rot_seed)
+    cos_seed = torch.cos(rot_seed)
+
+    Rx_seed = torch.zeros(seed_size[0], seed_size[1], seed_size[2], 3, 3,  device=device)
+    Rx_seed[..., 0, 0] = 1
+    Rx_seed[..., 1, 1] = cos_seed[..., 0]
+    Rx_seed[..., 1, 2] = -sin_seed[..., 0]
+    Rx_seed[..., 2, 1] = sin_seed[..., 0]
+    Rx_seed[..., 2, 2] = cos_seed[..., 0]
+
+    Ry_seed = torch.zeros(seed_size[0], seed_size[1], seed_size[2], 3, 3,  device=device)
+    Ry_seed[..., 1, 1] = 1
+    Ry_seed[..., 0, 0] = cos_seed[..., 1]
+    Ry_seed[..., 2, 0] = -sin_seed[..., 1]
+    Ry_seed[..., 0, 2] = sin_seed[..., 1]
+    Ry_seed[..., 2, 2] = cos_seed[..., 1]
+
+    Rz_seed = torch.zeros(seed_size[0], seed_size[1], seed_size[2], 3, 3,  device=device)
+    Rz_seed[..., 2, 2] = 1
+    Rz_seed[..., 0, 0] = cos_seed[..., 2]
+    Rz_seed[..., 0, 1] = -sin_seed[..., 2]
+    Rz_seed[..., 1, 0] = sin_seed[..., 2]
+    Rz_seed[..., 1, 1] = cos_seed[..., 2]
+
+    R_seed = torch.matmul(torch.matmul(Rx_seed, Ry_seed), Rz_seed)
+
+    if Rinv is not None:
+        R_seed = torch.matmul(R_seed, Rinv.detach().float())
+
+    R_nonLin = torch.nn.functional.interpolate(torch.permute(R_seed, (3, 4, 0, 1, 2)),
+                                               size=(crop_size[0], crop_size[1], crop_size[2]),
+                                               mode='trilinear',
+                                               align_corners=True)
+
+    R_nonLin = torch.permute(R_nonLin, (2, 3, 4, 0, 1))
+
+    return R_nonLin
+
+
 
 

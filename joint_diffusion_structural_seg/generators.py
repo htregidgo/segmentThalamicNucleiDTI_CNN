@@ -240,7 +240,7 @@ def image_seg_generator_rgb(training_dir,
                             batchsize=1,
                             scaling_bounds=0.15,
                             rotation_bounds=15,
-                            nonlinear_rotation=True,
+                            nonlinear_rotation=False,
                             max_noise_std=0.1,
                             max_noise_std_fa=0.03,
                             gamma_std=0.1,
@@ -402,14 +402,15 @@ def image_seg_generator_rgb(training_dir,
                 dti_def = combo_def[:, :, :, 1:]
 
             else:
-                # maximum displacement from scaled rigid rotation (in mm)
+
 
 
                 # This function generates the cropped x, y and z interpolation coordinates and resamples the correctly
-                # reoriented dti in rgb space
+                # reoriented dti in rgb space using preservation of principle direction
                 dti_def, xx2, yy2, zz2 = dtiutils.randomly_resample_dti_PPD(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size,
                                                                         cropx, cropy, cropz,flag_deformation,
-                                                                        deformation_max, t1_resolution)
+                                                                        deformation_max, t1_resolution,
+                                                                        nonlinear_rotation, rotation_bounds)
 
                 t1_def = fast_3D_interp_torch(t1, xx2, yy2, zz2, 'linear')
 

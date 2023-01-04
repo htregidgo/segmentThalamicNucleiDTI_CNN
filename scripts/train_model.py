@@ -24,6 +24,8 @@ crop_size = 128
 scaling_bounds = 0.15
 # Maximum rotation during augmentation, in degrees. 15 is a good value
 rotation_bounds = 15
+# Flag whether we'll individually rotate the DTI vectors
+nonlinear_rotation=True
 # Maximum standard deviation of noise to add in augmentation.
 # Since images are normalized, 0.1 is a good value for t1 (a bit lower for FA, since it's a fit already)
 max_noise_std = 0.1
@@ -83,6 +85,7 @@ train(training_dir,
              crop_size=crop_size,
              scaling_bounds=scaling_bounds,
              rotation_bounds=rotation_bounds,
+             nonlinear_rotation=nonlinear_rotation,
              max_noise_std=max_noise_std,
              max_noise_std_fa=max_noise_std_fa,
              gamma_std=gamma_std,
