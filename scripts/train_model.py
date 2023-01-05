@@ -4,18 +4,21 @@ from joint_diffusion_structural_seg.training import train
 #training_dir = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data/'
 # training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_withValidation/train/'
 # validation_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_withValidation/validate/'
-training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_reduced/train/'
-validation_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_reduced/validate/'
+# training_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_reduced/train/'
+# validation_dir = '/home/henry/Documents/Brain/synthDTI/4henry/data/training_reduced/validate/'
+training_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced/train/'
+validation_dir = None
 # validation_dir = None
 # NPY file with list of labels
 # path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list.npy'
-path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_reduced.npy'
+# path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_reduced.npy'
+path_label_list = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced/proc_training_data_label_list_reduced.npy'
 # Directory where model files will be written
 # model_dir = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThaldebug/'
-model_dir = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_reducedLabels_l2test'
+model_dir = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_new_year_run'
 # NPY file with segmentation of channels into groups
 # path_group_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_group_seg.npy'
-path_group_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_group_seg_reduced.npy'
+path_group_list = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced/proc_training_group_seg_reduced.npy'
 # Batch size being volumes, it will probably be always 1...
 batchsize = 1
 # Size to which inputs will be cropped (use None to use whole volume)
@@ -44,6 +47,9 @@ generator_mode = 'rgb'
 diffusion_resolution = 1.25
 # Fraction of DTI voxels to randomise
 speckle_frac_selected=1e-4
+# How to encode the segs into a onehot
+# single (pick an example), combined (average), mode (majority vote), grouped (majority vote on group then average)
+seg_selection='grouped'
 # Will we deform the vollumes with piecewise linear displacement fields
 flag_deformation = True
 # Maximimum piecewise linear displacement in mm (excluding rotation + scaling)
@@ -99,6 +105,7 @@ train(training_dir,
              generator_mode=generator_mode,
              diffusion_resolution=diffusion_resolution,
              speckle_frac_selected=speckle_frac_selected,
+             seg_selection=seg_selection,
              flag_deformation=flag_deformation,
              deformation_max=deformation_max,
              n_levels=n_levels,

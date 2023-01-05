@@ -47,6 +47,9 @@ brightness_std = 0.1
 randomize_resolution = True
 # Fraction of DTI voxels to randomise
 speckle_frac_selected=1e-4
+# How to encode the segs into a onehot
+# single (pick an example), combined (average), mode (majority vote), grouped (majority vote on group then average)
+seg_selection='grouped'
 # Will we deform the vollumes with piecewise linear displacement fields
 flag_deformation = True
 # Maximimum piecewise linear displacement in mm (excluding rotation + scaling)
@@ -91,6 +94,7 @@ checkpoint = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_struct
 
 generator = image_seg_generator_rgb(training_dir,
                                 path_label_list,
+                                path_group_list,
                                 batchsize=batchsize,
                                 scaling_bounds=scaling_bounds,
                                 rotation_bounds=rotation_bounds,
@@ -104,6 +108,7 @@ generator = image_seg_generator_rgb(training_dir,
                                 randomize_resolution=randomize_resolution,
                                 diffusion_resolution=diffusion_resolution,
                                 speckle_frac_selected=speckle_frac_selected,
+                                seg_selection=seg_selection,
                                 flag_deformation=flag_deformation,
                                 deformation_max=deformation_max)
 

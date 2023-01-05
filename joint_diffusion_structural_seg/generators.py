@@ -237,6 +237,7 @@ def image_seg_generator(training_dir,
 # Afer porting this to torch (rather than using numpy), an iteration with this generator takes about 1.5 seconds on my machine (much better than 7 seconds with numpy)
 def image_seg_generator_rgb(training_dir,
                             path_label_list,
+                            path_group_list,
                             batchsize=1,
                             scaling_bounds=0.15,
                             rotation_bounds=15,
@@ -251,17 +252,27 @@ def image_seg_generator_rgb(training_dir,
                             diffusion_resolution=None,
                             speckle_frac_selected=1e-4,
                             randomize_flip=True,
-                            seg_selection='combined',
+                            seg_selection='grouped',
                             flag_deformation=True,
                             deformation_max = 5.0):
 
     # check type of one-hot encoding
-    assert (seg_selection == 'single') or (seg_selection == 'combined'),\
-        'seg_selection must be single or combined'
+    assert (seg_selection == 'single') or (seg_selection == 'combined') \
+            or (seg_selection == 'mode') or (seg_selection == 'grouped') ,\
+            'seg_selection must be single, combined, mode or grouped'
 
     # check speckle fraction is in range
     assert (speckle_frac_selected<1) and (speckle_frac_selected>=0),\
         'fraction of DTI voxels randomised must be between 0 and 1'
+
+    if seg_selection =='grouped':
+        grp_list = np.load(path_group_list)
+        grp_mat = torch.zeros(grp_list.shape[0], grp_list.max() + 1, dtype=torch.float64)
+        for il in range(0, grp_list.shape[0]):
+            grp_mat[il, grp_list[il]] = 1
+
+    else :
+        grp_mat = None
 
     # only perform speckle when selection fraction is greater than 0
     randomize_speckle = speckle_frac_selected>0
@@ -477,7 +488,7 @@ def image_seg_generator_rgb(training_dir,
                 fa_def = torch.sqrt(torch.sum(dti_def * dti_def, dim=-1))
 
             # Efficiently turn label map into one hot encoded array
-            onehot = encode_onehot(mapping, seg_def, label_list, seg_selection)
+            onehot = encode_onehot(mapping, seg_def, label_list, seg_selection, grp_mat)
 
             # introduce left right flipping. You need to
             # a) flip all the volumes,
@@ -848,14 +859,14 @@ def augment_dti_and_fa(dti_def, gamma_std, max_noise_std_fa):
     return dti_def, fa_def
 
 
-def encode_onehot(mapping, seg_def, label_list, seg_selection):
+def encode_onehot(mapping, seg_def, label_list, seg_selection, grp_mat):
 
     if seg_selection == 'single':
         seg_def = mapping[seg_def.long()]
         eye = np.eye(len(label_list))
         eye = torch.tensor(eye, device='cpu')
         onehot = eye[seg_def]
-    else:
+    elif seg_selection == 'combined':
         seg_def = mapping[seg_def.long()]
         seg_def_max = torch.max(seg_def, dim=-1)[0]
         eye = np.eye(len(label_list))
@@ -864,6 +875,28 @@ def encode_onehot(mapping, seg_def, label_list, seg_selection):
         # use max onehot to get background right then replace the thalamus with averaged
         onehot[seg_def_max > 0, :] = torch.sum(eye[seg_def[seg_def_max > 0, :]], dim=-2)
         onehot /= torch.sum(onehot, dim=-1, keepdim=True)
+    elif seg_selection == 'mode':
+        seg_def = mapping[seg_def.long()]
+        seg_def_mode = torch.mode(seg_def, dim=-1)[0]
+        eye = np.eye(len(label_list))
+        eye = torch.tensor(eye, device='cpu')
+        onehot = eye[seg_def_mode]
+    else :
+        seg_def = mapping[seg_def.long()]
+        seg_def_max = torch.max(seg_def, dim=-1)[0]
+        eye = np.eye(len(label_list))
+        eye = torch.tensor(eye, device='cpu')
+        onehot = eye[seg_def_max]
+        # use max onehot to get background right then replace the thalamus with averaged
+        thal_average = torch.sum(eye[seg_def[seg_def_max > 0, :]], dim=-2)
+        # summ over grouped labels
+        soft_mask = thal_average @ grp_mat
+        # keep only most likely group
+        mask = (soft_mask == soft_mask.max(dim=-1, keepdim=True)[0]).to(dtype=torch.float64) @ grp_mat.t()
+        onehot[seg_def_max > 0, :] = thal_average * mask
+        onehot /= torch.sum(onehot, dim=-1, keepdim=True)
+        # y = tf.transpose(tf.math.unsorted_segment_sum(tf.transpose(y), self.group_seg, num_segments=self.n_groups ))
+
 
 
     return onehot
