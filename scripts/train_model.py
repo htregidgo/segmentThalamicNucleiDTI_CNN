@@ -86,6 +86,9 @@ checkpoint = None
 # checkpoint = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_mixedOnehot2/wl2_005.h5'
 # checkpoint = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_deformation/dice_001.h5'
 
+# Dice version - "individual" do standard label-wise Dice, "grouped" also add contribution of groups and whole thalamus
+dice_version="grouped"
+
 train(training_dir,
              path_label_list,
              model_dir,
@@ -120,6 +123,7 @@ train(training_dir,
              wl2_epochs=wl2_epochs,
              dice_epochs=dice_epochs,
              steps_per_epoch=steps_per_epoch,
-             checkpoint=checkpoint)
+             checkpoint=checkpoint,
+             dice_version=dice_version)
 
 
