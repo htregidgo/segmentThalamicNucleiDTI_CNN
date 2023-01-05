@@ -42,7 +42,8 @@ def train(training_dir,
              dice_epochs=200,
              steps_per_epoch=1000,
              checkpoint=None,
-             dice_version="grouped"):
+             dice_version="grouped",
+             checkpoint_frequency=1):
 
     # check epochs
     assert (wl2_epochs > 0) | (dice_epochs > 0), \
@@ -149,7 +150,8 @@ def train(training_dir,
 
     # fine-tuning with dice metric
     train_model(unet_model, generator, lr, lr_decay, dice_epochs, steps_per_epoch, model_dir, 'dice', n_labels,
-                group_seg, n_groups, checkpoint, validation_generator=validation_generator, dice_version=dice_version)
+                group_seg, n_groups, checkpoint, validation_generator=validation_generator, dice_version=dice_version,
+                checkpoint_frequency=checkpoint_frequency)
 
     print('All done!')
 
@@ -167,7 +169,8 @@ def train_model(model,
                 n_groups=None,
                 path_checkpoint=None,
                 validation_generator=None,
-                dice_version="grouped"):
+                dice_version="grouped",
+                checkpoint_frequency=1):
 
     # prepare log folder
     log_dir = os.path.join(model_dir, 'logs')
@@ -178,8 +181,7 @@ def train_model(model,
 
     # model saving callback
     save_file_name = os.path.join(model_dir, '%s_{epoch:03d}.h5' % metric_type)
-    callbacks = [KC.ModelCheckpoint(save_file_name, verbose=1)]
-    # callbacks = [KC.ModelCheckpoint(save_file_name, verbose=1, period=5)]
+    callbacks = [KC.ModelCheckpoint(save_file_name, verbose=1, period=checkpoint_frequency)]
 
     # TensorBoard callback
     if metric_type == 'dice':

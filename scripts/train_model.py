@@ -89,6 +89,9 @@ checkpoint = None
 # Dice version - "individual" do standard label-wise Dice, "grouped" also add contribution of groups and whole thalamus
 dice_version="grouped"
 
+# frequency of saving model checkpoints (Dice iterations only)
+checkpoint_frequency = 5
+
 train(training_dir,
              path_label_list,
              model_dir,
@@ -124,6 +127,7 @@ train(training_dir,
              dice_epochs=dice_epochs,
              steps_per_epoch=steps_per_epoch,
              checkpoint=checkpoint,
-             dice_version=dice_version)
+             dice_version=dice_version,
+             checkpoint_frequency=checkpoint_frequency)
 
 
