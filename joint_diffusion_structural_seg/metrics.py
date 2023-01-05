@@ -25,7 +25,7 @@ class DiceLoss(object):
         x = K.clip(x / tf.math.reduce_sum(x, axis=-1, keepdims=True), 0, 1)
         y = K.clip(y / tf.math.reduce_sum(y, axis=-1, keepdims=True), 0, 1)
         # compute dice loss for each label
-        top = tf.math.reduce_sum(2 * x * y, axis=list(range(1, 4)))
+        top = tf.math.reduce_sum(2 * x * y + tf.keras.backend.epsilon(), axis=list(range(1, 4)))
         bottom = tf.math.square(x) + tf.math.square(y) + tf.keras.backend.epsilon()
         bottom = tf.math.reduce_sum(bottom, axis=list(range(1, 4)))
         dice = top / bottom
