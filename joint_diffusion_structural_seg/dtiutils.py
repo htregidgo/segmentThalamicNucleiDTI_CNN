@@ -223,32 +223,23 @@ def resmple_dti_PPD(fa, v1, displacement, F_reorient):
     wcz = Inds_v[..., 2] - fz
     wfz = 1 - wcz
 
-
-    left_sample =torch.lu_solve(v1[fx, fy, fz, :, None],*F_factor)[..., 0]
-    left_sample /= torch.linalg.norm(left_sample,dim=1)[...,None] +1.0e-10
-    right_sample=torch.lu_solve(v1[cx, fy, fz, :, None],*F_factor)[..., 0]
-    right_sample /= torch.linalg.norm(right_sample,dim=1)[...,None] +1.0e-10
+    left_sample = reorient_sample_lu(F_factor, fx, fy, fz, v1)
+    right_sample = reorient_sample_lu(F_factor, cx, fy, fz, v1)
     c00 = (wfx[..., None] * (fa[fx, fy, fz])[..., None]) * torch.abs(left_sample) \
           + (wcx[..., None] * (fa[cx, fy, fz])[..., None]) * torch.abs(right_sample)
 
-    left_sample = torch.lu_solve(v1[fx, fy, cz, :, None],*F_factor)[..., 0]
-    left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None] +1.0e-10
-    right_sample = torch.lu_solve(v1[cx, fy, cz, :, None],*F_factor)[..., 0]
-    right_sample /= torch.linalg.norm(right_sample, dim=1)[..., None] +1.0e-10
+    left_sample = reorient_sample_lu(F_factor, fx, fy, cz, v1)
+    right_sample = reorient_sample_lu(F_factor, cx, fy, cz, v1)
     c01 = (wfx[..., None] * (fa[fx, fy, cz])[..., None]) * torch.abs(left_sample) \
           + (wcx[..., None] * (fa[cx, fy, cz])[..., None]) * torch.abs(right_sample)
 
-    left_sample = torch.lu_solve(v1[fx, cy, fz, :, None],*F_factor)[..., 0]
-    left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None] +1.0e-10
-    right_sample = torch.lu_solve(v1[cx, cy, fz, :, None],*F_factor)[..., 0]
-    right_sample /= torch.linalg.norm(right_sample, dim=1)[..., None] +1.0e-10
+    left_sample = reorient_sample_lu(F_factor, fx, cy, fz, v1)
+    right_sample = reorient_sample_lu(F_factor, cx, cy, fz, v1)
     c10 = (wfx[..., None] * (fa[fx, cy, fz])[..., None]) * torch.abs(left_sample) \
           + (wcx[..., None] * (fa[cx, cy, fz])[..., None]) * torch.abs(right_sample)
 
-    left_sample = torch.lu_solve(v1[fx, cy, cz, :, None],*F_factor)[..., 0]
-    left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None] +1.0e-10
-    right_sample = torch.lu_solve(v1[cx, cy, cz, :, None],*F_factor)[..., 0]
-    right_sample /= torch.linalg.norm(right_sample, dim=1)[..., None] +1.0e-10
+    left_sample = reorient_sample_lu(F_factor, fx, cy, cz, v1)
+    right_sample = reorient_sample_lu(F_factor, cx, cy, cz, v1)
     c11 = (wfx[..., None] * (fa[fx, cy, cz])[..., None]) * torch.abs(left_sample) \
           + (wcx[..., None] * (fa[cx, cy, cz])[..., None]) * torch.abs(right_sample)
 
@@ -265,7 +256,22 @@ def resmple_dti_PPD(fa, v1, displacement, F_reorient):
 
     return dti_def
 
-# Apply a approximate rotation matrices to each DTI voxel
+
+def reorient_sample_lu(F_factor, xx, yy, zz, v1):
+    side_vectors = v1[xx, yy, zz, :]
+    side_sample = torch.zeros_like(side_vectors)
+    side_mask = torch.any(side_vectors != 0, dim=1)
+
+    side_sample[side_mask] = torch.lu_solve(side_vectors[side_mask][...,None],
+                                 F_factor[0][side_mask],
+                                 F_factor[1][side_mask])[..., 0]
+    # left_sample /= torch.linalg.norm(left_sample, dim=1)[..., None] + 1.0e-10
+    side_sample /= torch.sqrt(torch.sum(side_sample**2,dim=1,keepdim=True)) + 1.0e-10
+    return side_sample
+
+
+
+# Apply an approximate rotation matrices to each DTI voxel
 def rotate_vector(Rinv, nx, ny, nz, rotation_bounds, v1):
     Rinv_nl = gen_non_linear_rotations([5] * 3, [nx, ny, nz], (rotation_bounds / 360) * np.pi, Rinv=Rinv)
     v1_rot = torch.matmul(Rinv_nl, v1[..., None])[:, :, :, :, 0]
