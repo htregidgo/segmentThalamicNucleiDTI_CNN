@@ -128,4 +128,4 @@ next(generator)
 next(generator)
 end = time.time()
 print("The time of execution of above program is :",
-      (end-start) * 10**3, "ms")
+      ((end-start)/5) * 10**3, "ms")
