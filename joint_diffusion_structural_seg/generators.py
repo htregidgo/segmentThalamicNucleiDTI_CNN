@@ -1,11 +1,14 @@
 import glob
-import numpy as np
 import os
-from joint_diffusion_structural_seg import utils
+
+import numpy as np
+import torch
 from scipy.interpolate import RegularGridInterpolator as rgi
 from scipy.ndimage import gaussian_filter as gauss_filt
-import torch
+
 from joint_diffusion_structural_seg import dtiutils
+from joint_diffusion_structural_seg import utils
+
 
 # This is the first generator I tried, deforming the FA linearly and the direction with nearest neighbors
 # TODO: right now it takes 3.5 seconds on my machine... not great, not terrible

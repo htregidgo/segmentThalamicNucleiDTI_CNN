@@ -1,9 +1,7 @@
 import numpy as np
-import os
 
 import torch
 
-from joint_diffusion_structural_seg import utils
 
 def randomly_resample_dti(v1, fa, R, s, xc, yc, zc, cx, cy, cz, crop_size, cropx, cropy, cropz,
                           flag_deformation=True, deformation_max=5.0, t1_resolution=np.array([0.7]*3)):

@@ -1,9 +1,7 @@
 import os
-import numpy as np
-import keras.callbacks as KC
-import torch
 import time
-from joint_diffusion_structural_seg.generators import image_seg_generator, image_seg_generator_rgb, image_seg_generator_rgb_validation
+
+from joint_diffusion_structural_seg.generators import image_seg_generator_rgb
 
 ## machine specific directories
 top_level_training_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced'

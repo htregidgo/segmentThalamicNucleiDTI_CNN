@@ -1,5 +1,7 @@
-from joint_diffusion_structural_seg.training import train
 import os
+
+from joint_diffusion_structural_seg.training import train
+
 
 def ablation_training_function(top_level_training_dir, label_list_name, group_list_name,
                                top_level_model_dir, model_name, nonlinear_rotation,

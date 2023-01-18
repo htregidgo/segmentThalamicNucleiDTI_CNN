@@ -1,5 +1,6 @@
-from joint_diffusion_structural_seg.ablation_training import ablation_training_function
 import os
+
+from joint_diffusion_structural_seg.ablation_training import ablation_training_function
 
 ## machine specific directories
 top_level_data_dir = '/media/henry/_localstore/Brain/synthDTI/large_download'

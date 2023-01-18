@@ -1,10 +1,12 @@
 # This file contains a bunch of functions from Benjamin's lab2im package
 # (it's just much lighter to import...)
+import os
+
 import nibabel as nib
 import numpy as np
-import os
 from scipy.interpolate import RegularGridInterpolator as rgi
 from scipy.ndimage import gaussian_filter as gauss_filt
+
 
 def load_volume(path_volume, im_only=True, squeeze=True, dtype=None, aff_ref=None):
     """

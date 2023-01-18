@@ -1,9 +1,10 @@
 import os
+
 import numpy as np
-import joint_diffusion_structural_seg.utils as utils
-from joint_diffusion_structural_seg import models
 from scipy import ndimage
 
+import joint_diffusion_structural_seg.utils as utils
+from joint_diffusion_structural_seg import models
 
 
 def predict(subject_list,

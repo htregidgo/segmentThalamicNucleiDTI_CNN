@@ -1,8 +1,5 @@
-import os
-import numpy as np
-import keras.callbacks as KC
-import torch
 import time
+
 from tmp.rotationTest import image_seg_generator_rgb_rotationtest
 
 # Path with training data

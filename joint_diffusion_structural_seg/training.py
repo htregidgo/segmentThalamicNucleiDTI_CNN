@@ -1,10 +1,13 @@
 import os
-import numpy as np
+
 import keras.callbacks as KC
+import numpy as np
 from keras.optimizers import Adam
-from joint_diffusion_structural_seg.generators import image_seg_generator, image_seg_generator_rgb, image_seg_generator_rgb_validation
-from joint_diffusion_structural_seg import models
+
 from joint_diffusion_structural_seg import metrics
+from joint_diffusion_structural_seg import models
+from joint_diffusion_structural_seg.generators import image_seg_generator, image_seg_generator_rgb, \
+    image_seg_generator_rgb_validation
 
 
 def train(training_dir,

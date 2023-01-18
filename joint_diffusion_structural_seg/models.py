@@ -1,8 +1,8 @@
-import numpy as np
 import keras
-import keras.layers as KL
-from keras.models import Model
 import keras.backend as K
+import keras.layers as KL
+import numpy as np
+from keras.models import Model
 
 
 def unet(nb_features,

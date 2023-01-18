@@ -1,5 +1,6 @@
-from joint_diffusion_structural_seg.training import train
 import os
+
+from joint_diffusion_structural_seg.training import train
 
 ## machine specific directories
 top_level_training_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced'
