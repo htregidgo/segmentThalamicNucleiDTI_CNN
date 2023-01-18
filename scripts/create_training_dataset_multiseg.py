@@ -6,10 +6,12 @@
 # 4. Crops the volumes around the thalami (we don't want to look too far from them)
 #
 # This is only a partial training set as we still need to get the dti files resampled using log tensors.
-import os
-import numpy as np
-import joint_diffusion_structural_seg.utils as utils
 import glob
+import os
+
+import numpy as np
+
+import joint_diffusion_structural_seg.utils as utils
 
 # henry_seg_dir = '/home/henry/Documents/Brain/ThalamicNuclei/HTtestdata'
 henry_seg_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/henry/'
