@@ -6,10 +6,12 @@
 # 4. Resamples the ground truth segmentation to the space of the T1
 # 5. Crops the 3 volumes around the thalami (we don't want to look too far from them)
 import os
+
 import numpy as np
+from scipy import ndimage
+
 import joint_diffusion_structural_seg.utils as utils
 from joint_diffusion_structural_seg import models
-from scipy import ndimage
 
 # TODO: you don't want to create a Unet for every subject... it's be good to write a loop over subjects in the provided
 # FreeSurfer directory and push them through the Unet
@@ -41,7 +43,8 @@ else:
     dataset = 'ADNI'
 # path_label_list = '/autofs/space/panamint_005/users/iglesias/data/joint_diffusion_structural_seg/proc_training_data_label_list.npy'
 # path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list.npy'
-path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_reduced.npy'
+# path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_reduced.npy'
+path_label_list = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced/proc_training_data_label_list_reduced.npy'
 # model_file = '/autofs/homes/002/iglesias/python/code/joint_diffusion_structural_seg/models/base_model.h5'
 # model_file = '/home/henry/Documents/Brain/synthDTI/4henry/joint_diffusion_structural_seg/models/diffusion_thalamus_test_LabelLossWithWholeThaldebug/dice_011.h5'
 # model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_newTrainingSet/dice_001.h5'
@@ -49,15 +52,16 @@ path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_trainin
 # model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_pytorch/dice_006.h5'
 # model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_deformation_fromScratch_speckle/dice_057.h5'
 # model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_mixedOnehot2/dice_035.h5'
-model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_reducedLabels/dice_050.h5'
+# model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_reducedLabels/dice_050.h5'
+model_file = '/media/henry/_localstore/Brain/synthDTI/models/joint_thalamus_ablation_01/dice_025.h5'
 resolution_model_file = 0.7
 generator_mode = 'rgb' # rgb or Must be the same as in training
 
 if not os.path.exists(os.path.join(fs_subject_dir, subject, 'results')):
     os.mkdir(os.path.join(fs_subject_dir, subject, 'results'))
 
-output_seg_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_reduced_randV1_e050.seg.mgz')
-output_vol_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_reduced_randV1_e050.vol.npy')
+output_seg_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_abltn01_e025.seg.mgz')
+output_vol_file = os.path.join(fs_subject_dir, subject, 'results', 'thalNet_abltn01_e025.vol.npy')
 
 ##########################################################################################
 
