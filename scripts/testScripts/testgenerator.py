@@ -4,8 +4,8 @@ import time
 from joint_diffusion_structural_seg.generators import image_seg_generator_rgb
 
 ## machine specific directories
-top_level_training_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced'
-top_level_model_dir = '/media/henry/_localstore/Brain/synthDTI/models'
+top_level_training_dir = '../data/training_reduced'
+top_level_model_dir = '../models'
 
 ## Run specific parameters that will change for ablations
 # Name of the model - link to ablation spreadsheet

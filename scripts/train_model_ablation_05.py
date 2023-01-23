@@ -3,8 +3,8 @@ import os
 from joint_diffusion_structural_seg.ablation_training import ablation_training_function
 
 ## machine specific directories
-top_level_data_dir = '/media/henry/_localstore/Brain/synthDTI/large_download'
-top_level_model_dir = '/media/henry/_localstore/Brain/synthDTI/models'
+top_level_data_dir = '../data'
+top_level_model_dir = '../models'
 
 ## Run specific parameters that will change for ablations
 # Name of the model - link to ablation spreadsheet
