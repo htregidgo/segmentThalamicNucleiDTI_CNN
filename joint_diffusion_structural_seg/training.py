@@ -1,9 +1,11 @@
 import os
-
+import glob
+import keras
 import keras.callbacks as KC
 import numpy as np
+import tensorflow as tf
+from keras import models as KM
 from keras.optimizers import Adam
-
 from joint_diffusion_structural_seg import metrics
 from joint_diffusion_structural_seg import models
 from joint_diffusion_structural_seg.generators import image_seg_generator, image_seg_generator_rgb, \
@@ -45,6 +47,8 @@ def train(training_dir,
              dice_epochs=200,
              steps_per_epoch=1000,
              checkpoint=None,
+             checkpoint_l2=None,
+             checkpoint_dice=None,
              dice_version="grouped",
              checkpoint_frequency=1):
 
@@ -61,6 +65,20 @@ def train(training_dir,
     if diffusion_resolution is not None:
         if type(diffusion_resolution) == int:
             diffusion_resolution = [diffusion_resolution] * 3
+
+    if checkpoint is None :
+        if (checkpoint_dice is None) & (checkpoint_l2 is None):
+            checkpoint_list=sorted(glob.glob(model_dir + '/dice_???.h5'))
+            if len(checkpoint_list)!=0 :
+                checkpoint_dice = checkpoint_list[-1]
+            else :
+                checkpoint_list=sorted(glob.glob(model_dir + '/wl2_???.h5'))
+                if len(checkpoint_list)!=0 :
+                    checkpoint_l2 = checkpoint_list[-1]
+
+        if checkpoint_l2 is not None:
+            checkpoint = checkpoint_l2
+
 
     if generator_mode == 'rgb':
         generator = image_seg_generator_rgb(training_dir,
@@ -146,14 +164,14 @@ def train(training_dir,
                                  input_model=None)
 
     # pre-training with weighted L2, input is fit to the softmax rather than the probabilities
-    if wl2_epochs > 0:
+    if (wl2_epochs > 0) & (checkpoint_dice is None):
         wl2_model = models.Model(unet_model.inputs, [unet_model.get_layer('unet_likelihood').output])
         train_model(wl2_model, generator, lr, lr_decay, wl2_epochs, steps_per_epoch, model_dir, 'wl2', n_labels, checkpoint)
-        checkpoint = os.path.join(model_dir, 'wl2_%03d.h5' % wl2_epochs)
+        checkpoint_dice = os.path.join(model_dir, 'wl2_%03d.h5' % wl2_epochs)
 
     # fine-tuning with dice metric
     train_model(unet_model, generator, lr, lr_decay, dice_epochs, steps_per_epoch, model_dir, 'dice', n_labels,
-                group_seg, n_groups, checkpoint, validation_generator=validation_generator, dice_version=dice_version,
+                group_seg, n_groups, checkpoint_dice, validation_generator=validation_generator, dice_version=dice_version,
                 checkpoint_frequency=checkpoint_frequency)
 
     print('All done!')
@@ -173,7 +191,8 @@ def train_model(model,
                 path_checkpoint=None,
                 validation_generator=None,
                 dice_version="grouped",
-                checkpoint_frequency=1):
+                checkpoint_frequency=1,
+                reinitialise_momentum=False):
 
     # prepare log folder
     log_dir = os.path.join(model_dir, 'logs')
@@ -190,29 +209,46 @@ def train_model(model,
     if metric_type == 'dice':
         callbacks.append(KC.TensorBoard(log_dir=log_dir, histogram_freq=0, write_graph=True, write_images=False))
 
+    compile_model = True
+    init_epoch = 0
     if path_checkpoint is not None:
-            print('loading weights from checkpoint:')
-            print(path_checkpoint)
+        print('Checkpoint found:')
+        print(path_checkpoint)
+        if metric_type in path_checkpoint:
+            init_epoch = int(os.path.basename(path_checkpoint).split(metric_type)[1][1:-3])
+        if (not reinitialise_momentum) & (metric_type in path_checkpoint):
+            if metric_type == 'dice':
+                if dice_version == "grouped":
+                    custom_objects = {'tf': tf, 'keras': keras, 'loss': metrics.DiceLossGrouped(group_seg, n_groups).loss}
+                else :
+                    custom_objects = {'tf': tf, 'keras': keras, 'loss': metrics.DiceLoss().loss}
+            else :
+                custom_objects = {'tf': tf, 'keras': keras, 'loss': metrics.WL2Loss(3.0, n_labels, background_weight=0.01).loss}
+            model = KM.load_model(path_checkpoint, custom_objects=custom_objects)
+            compile_model = False
+        else:
             model.load_weights(path_checkpoint, by_name=True)
 
+
     # compile
-    if metric_type == 'dice':
-        if dice_version=="grouped":
-            assert (group_seg is not None) & (n_groups is not None), \
-                "grouped Dice requires thalamic nuclei be grouped in a file provided by group_seg"
+    if compile_model :
+        if metric_type == 'dice':
+            if dice_version=="grouped":
+                assert (group_seg is not None) & (n_groups is not None), \
+                    "grouped Dice requires thalamic nuclei be grouped in a file provided by group_seg"
 
-            model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
-                      loss=metrics.DiceLossGrouped(group_seg, n_groups).loss,
-                      loss_weights=[1.0])
+                model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
+                          loss=metrics.DiceLossGrouped(group_seg, n_groups).loss,
+                          loss_weights=[1.0])
 
+            else:
+                model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
+                              loss=metrics.DiceLoss().loss,
+                              loss_weights=[1.0])
         else:
             model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
-                          loss=metrics.DiceLoss().loss,
+                          loss=metrics.WL2Loss(3.0, n_labels, background_weight=0.01).loss, # since we crop, 0.01 is ok
                           loss_weights=[1.0])
-    else:
-        model.compile(optimizer=Adam(lr=learning_rate, decay=lr_decay),
-                      loss=metrics.WL2Loss(3.0, n_labels, background_weight=0.01).loss, # since we crop, 0.01 is ok
-                      loss_weights=[1.0])
 
     # fit
     if validation_generator is not None:
@@ -227,7 +263,7 @@ def train_model(model,
                             epochs=n_epochs,
                             steps_per_epoch=n_steps,
                             callbacks=callbacks,
-                            initial_epoch=0,
+                            initial_epoch=init_epoch,
                             use_multiprocessing=True,
                             validation_data=validation_generator,
                             validation_steps=60,
@@ -237,7 +273,7 @@ def train_model(model,
                             epochs=n_epochs,
                             steps_per_epoch=n_steps,
                             callbacks=callbacks,
-                            initial_epoch=0,
+                            initial_epoch=init_epoch,
                             use_multiprocessing=True)
 
 
