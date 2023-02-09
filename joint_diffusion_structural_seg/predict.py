@@ -5,14 +5,14 @@ from scipy import ndimage
 
 import joint_diffusion_structural_seg.utils as utils
 from joint_diffusion_structural_seg import models
-
+from skimage.measure import label
 
 def predict(subject_list,
                 fs_subject_dir,
                 dataset,
                 path_label_list,
                 model_file,
-                model_file_resolution=0.7,
+                resolution_model_file=0.7,
                 generator_mode='rgb',
                 unet_feat_count=24,
                 n_levels=5,
@@ -158,6 +158,23 @@ def predict(subject_list,
         # Fill holes
         thal_mask = posteriors[..., 0] < 0.5
         thal_mask = ndimage.binary_fill_holes(thal_mask)
+
+
+        # remove stray voxels with conn comps
+        thal_mask_copy = thal_mask.copy()
+        # min_size: size of largest objects to remove
+        # connectivity: for connected components, 1 is 6-connected, 2 is
+        # 18-connected, and 3 is 26-connected   
+        min_size = 10
+        connectivity = 3
+        #thal_mask = morphology.remove_small_objects(thal_mask_copy, min_size=min_size, connectivity=connectivity)
+            
+        ### OR just remove largest connected component
+        cc_labels = label(thal_mask_copy,connectivity=connectivity)
+        thal_mask = cc_labels == np.argmax(np.bincount(cc_labels.flat, weights=thal_mask_copy.flat))
+
+
+
         posteriors[thal_mask, 0] = 0
         posteriors /= np.sum(posteriors, axis=-1)[..., np.newaxis]
 
