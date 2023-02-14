@@ -21,14 +21,15 @@ def predict(subject_list,
                 nb_conv_per_level=2,
                 activation='elu',
                 bounding_box_width=128,
-                aff_ref=np.eye(4)):
+                aff_ref=np.eye(4),
+                shell_flag=None):
 
 
     
     assert (generator_mode == 'fa_v1') | (generator_mode == 'rgb'), \
         'generator mode must be fa_v1 or rgb'
 
-    assert dataset in ('HCP','ADNI','template','DRC') #will do for now
+    assert dataset in ('HCP','ADNI','template','validate','DRC') #will do for now
 
     # Load label list
     label_list = np.load(path_label_list)
@@ -82,6 +83,12 @@ def predict(subject_list,
             aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.mgz')
             fa_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_FA.nii.gz')
             v1_file = os.path.join(fs_subject_dir, subject, 'dmri', 'dtifit.1+2+3K_V1.nii.gz')
+
+        if dataset == 'validate':
+            t1_file = os.path.join(fs_subject_dir, subject, subject[:-3] + '.t1.nii.gz')
+            aseg_file = os.path.join(fs_subject_dir, subject, 'mri', 'aseg.mgz')
+            fa_file = os.path.join(fs_subject_dir, subject, 'dmri', subject + '_fa.nii.gz')
+            v1_file = os.path.join(fs_subject_dir, subject, 'dmri', subject + '_v1.nii.gz')
 
         if dataset=='DRC':
             # t1_file = os.path.join(fs_subject_dir, subject, 'mri', 'norm.reg2dwi.mgz')

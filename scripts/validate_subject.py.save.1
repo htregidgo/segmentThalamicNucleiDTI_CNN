@@ -1,0 +1,123 @@
+import numpy as np
+import os,sys
+sys.path.append("..")
+
+from joint_diffusion_structural_seg.predict import predict
+from joint_diffusion_structural_seg.metrics import DiceLossLabels
+from joint_diffusion_structural_seg import utils
+
+
+
+def dice(pred,gt,level=0):
+    pred_flat = pred.flatten()
+    gt_flat = gt.flatten()
+
+    pred_flat[pred_flat != level] = 0
+    pred_flat[pred_flat == level] = 1
+    gt_flat[gt_flat != level] = 0
+    gt_flat[gt_flat == level] =	1
+    
+    inter = np.sum(gt_flat * pred_flat)
+    epsilon = 1e-6
+    return (2. * inter + epsilon)/(np.sum(gt_flat) + np.sum(pred_flat) + epsilon)
+
+
+def label_dice(pred,gt,label_list):
+    label_dice_list = []
+    for label in label_list:
+        label_dice_list.append(dice(pred,gt,level=label))
+ 
+    return np.array(label_dice_list)
+
+
+def group_dice(pred,gt,label_list,group_list):
+    group_dice_list = []
+    for group in list(set(group_list)):     
+        pred_copy = pred.copy()
+        gt_copy = gt.copy()
+        label_indices = [i for i,x in enumerate(label_list) if x==group]
+        pred_copy[pred_copy in label_indices] == label_list[label_indices[0]] 
+        group_dice_list.append(dice(pred_copy,gt_copy,level=label_indices[0]))  
+    return np.array(group_dice_array), list(set(group_list)) 
+
+
+def thalamus_dice():
+    return 0
+
+
+
+
+subject_list = ['subject_141119']
+fs_subject_dir = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/training_reduced/validate/'
+# for now...must be
+dataset = 'validate'
+path_label_list = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/proc_training_data_label_list_reduced.npy'
+path_group_list = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/proc_training_group_seg_reduced.npy'
+model_file = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/models/dice_200.h5'
+# model file resolution
+resolution_model_file=0.7
+# generator mode for prediction data (make sure same as training!)
+generator_mode='rgb'
+# U-net: number of features in base level (make sure same as training!)
+unet_feat_count=24
+# U-net: number of levels (make sure same as training!)
+n_levels = 5
+# U-net: convolution kernel size (make sure same as training!)
+conv_size = 3
+# U-net: number of features per level multiplier (make sure same as training!)
+feat_multiplier = 2
+# U-net: number of convolutions per level (make sure same as training!)
+nb_conv_per_level = 2
+# U-net: activation function (make sure same as training!)
+activation='elu'
+# (isotropic) dimensions of bounding box to take around thalamus
+bounding_box_width = 128
+# reference affine
+aff_ref = np.eye(4)
+
+
+## load params including label and group lists
+shell_mag = ['_1k','_2k']
+seg_list = ['_1k_DSWbeta','_1k_LogGauss','_1k_Wishart','_2k_DSWbeta','_2k_LogGauss','_2k_Wishart']
+label_list = np.load(path_label_list)
+group_list = np.load(path_group_list)
+
+
+
+for subject in subject_list:
+    for shell in shell_mag:
+        unet_seg_file = os.path.join(fs_subject_dir)
+
+        predict([subject + shell],
+                    fs_subject_dir,
+                    dataset,
+                    path_label_list,
+                    model_file,
+                    resolution_model_file,
+                    generator_mode,
+                    unet_feat_count,
+                    n_levels,
+                    conv_size,
+                    feat_multiplier,
+                    nb_conv_per_level,
+                    activation,
+                    bounding_box_width,
+                    aff_ref,
+                    shell_flag=shell)
+
+        unet_seg_path = os.path.join(fs_subject_dir,subject + shell,'results','thalNet_reduced_randV1_e050.seg.mgz')
+        t1_path = os.path.join(fs_subject_dir,subject + shell, subject + '.t1.nii.gz')
+
+        # this is to make same dims
+        os.system("mri_convert " + unet_seg_path + " " + unet_seg_path +  " -rl " +  t1_path + "  -rt nearest -odt float")
+        unet_seg = utils.load_volume(unet_seg_path)
+        dl = DiceLossLabels()
+        for seg in seg_list:
+            seg_path = os.path.join(fs_subject_dir,subject + shell,'segs',subject + seg + ".nii.gz")
+            seg = utils.load_volume(seg_path)
+
+            label_dice_array = label_dice(seg,unet_seg,label_list)
+            group_dice_array = group_dice(seg,unet_seg,label_list,group_list))
+
+            print("average label dice loss for " + subject + " is: " + label_dice_array)
+            print("average group dice loss for " + subject + " is: " + group_dice_array)
