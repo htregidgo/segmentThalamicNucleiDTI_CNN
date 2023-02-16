@@ -1,17 +1,21 @@
-from joint_diffusion_structural_seg.training import predict
+import numpy as np 
+import sys
+sys.path.append("..")
+
+from joint_diffusion_structural_seg.predict import predict
 
 
 
 
 # keep in list form since you can iterate over multiple sunjects explicitely...implicit will be added soon
 subject_list = ['subject_101309']
-fs_subject_dir = '/home/henry/Documents/Brain/HCPDataset/HCP/'
+fs_subject_dir = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/test/'
 # for now...must be
-dataset = 'HCP'
-path_label_list = '/home/henry/Documents/Brain/synthDTI/4henry/data/proc_training_data_label_list_reduced.npy'
-model_file = '/media/henry/_localstore/Brain/synthDTI/models/diffusion_thalamus_test_reducedLabels/dice_050.h5'
+dataset = 'template'
+path_label_list = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/proc_training_data_label_list_reduced.npy'
+model_file = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/models/dice_200.h5'
 # model file resolution
-model_file_resolution=0.7
+resolution_model_file=0.7
 # generator mode for prediction data (make sure same as training!)
 generator_mode='rgb'
 # U-net: number of features in base level (make sure same as training!)
@@ -37,7 +41,7 @@ predict(subject_list,
             dataset,
             path_label_list,
             model_file,
-            model_file_resolution,
+            resolution_model_file,
             generator_mode,
             unet_feat_count,
             n_levels,
