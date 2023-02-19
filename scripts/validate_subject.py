@@ -1,9 +1,11 @@
+import glob
+
 import numpy as np
 import os,sys
 import torch
 sys.path.append("..")
 
-from joint_diffusion_structural_seg.predict import predict
+from joint_diffusion_structural_seg.validate import validate_dti_segs
 from joint_diffusion_structural_seg.metrics import DiceLossLabels
 from joint_diffusion_structural_seg import utils
 from joint_diffusion_structural_seg.generators import encode_onehot
@@ -59,15 +61,25 @@ def onehot(vol,label_list):
   return np.squeeze(np.eye(num_classes)[vol.reshape(-1)])
 
 
-subject_list = ['subject_141119']
-fs_subject_dir = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/training_reduced/validate/'
+# subject_list = ['subject_141119']
+# subject_list = ['subject_112112']
+top_training_dir = '/media/henry/_localstore/Brain/synthDTI/large_download/training_reduced/'
+top_model_dir = '/media/henry/_localstore/Brain/synthDTI/models/JEIablationruns/models/joint_thalamus_ablation_01/'
+fs_subject_dir = os.path.join(top_training_dir, 'validate/')
+path_label_list = os.path.join(top_training_dir, 'proc_training_data_label_list_reduced.npy')
+path_group_list = os.path.join(top_training_dir, 'proc_training_group_seg_reduced.npy')
+model_file = os.path.join(top_model_dir, 'dice_200.h5')
+
+subject_list = sorted(glob.glob(fs_subject_dir + '/subject*k'))
+
+# fs_subject_dir = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/training_reduced/validate/'
 # for now...must be
 dataset = 'validate'
-path_label_list = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/proc_training_data_label_list_reduced.npy'
-path_group_list = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/proc_training_group_seg_reduced.npy'
-model_file = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/models/dice_200.h5'
+# path_label_list = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/proc_training_data_label_list_reduced.npy'
+# path_group_list = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/data/proc_training_group_seg_reduced.npy'
+# model_file = '/autofs/space/nicc_003/users/olchanyi/scripts/tmp/files4mark/models/dice_200.h5'
 # model file resolution
-resolution_model_file=0.7
+resolution_of_model_file=0.7
 # generator mode for prediction data (make sure same as training!)
 generator_mode='rgb'
 # U-net: number of features in base level (make sure same as training!)
@@ -103,55 +115,48 @@ group_list = np.load(path_group_list)
 #    grp_mat[il, grp_list[il]] = 1
 
 
-for subject in subject_list:
-    for shell in shell_mag:
-        unet_seg_file = os.path.join(fs_subject_dir)
+validate_dti_segs(subject_list,
+        dataset,
+        path_label_list,
+        path_group_list,
+        model_file,
+        generator_mode,
+        unet_feat_count,
+        n_levels,
+        conv_size,
+        feat_multiplier,
+        nb_conv_per_level,
+        activation,
+        bounding_box_width)
 
-        predict([subject + shell],
-                    fs_subject_dir,
-                    dataset,
-                    path_label_list,
-                    model_file,
-                    resolution_model_file,
-                    generator_mode,
-                    unet_feat_count,
-                    n_levels,
-                    conv_size,
-                    feat_multiplier,
-                    nb_conv_per_level,
-                    activation,
-                    bounding_box_width,
-                    aff_ref,
-                    shell_flag=shell)
-
-        unet_seg_path = os.path.join(fs_subject_dir,subject + shell,'results','thalNet_reduced_randV1_e050.seg.mgz')
-        t1_path = os.path.join(fs_subject_dir,subject + shell, subject + '.t1.nii.gz')
-        unet_seg, aff_unet, hd_unet = utils.load_volume(unet_seg_path,im_only=False)
-
-       
-  
-        for seg_name in seg_list:
-            seg_path = os.path.join(fs_subject_dir,subject + shell,'segs',subject + seg_name + ".nii.gz")
-            seg, aff_seg, hd_seg = utils.load_volume(seg_path,im_only=False)
-            seg_reshaped = utils.resample_like(unet_seg, aff_unet, seg, aff_seg, method='nearest')
-
-            #seg_reshaped = torch.tensor(seg_reshaped.astype(int), device='cpu').long()
-            #unet_seg = torch.tensor(unet_seg.astype(int), device='cpu').long()
-            #mapping = torch.tensor(mapping.astype(int), device='cpu').long()
-            #unet_seg_encoded_labels = onehot(unet_seg_transformed_labels.astype(int),label_list)
-            #unet_seg_encoded_grouped = encode_onehot(mapping, unet_seg, label_list, 'grouped', grp_mat)
-            #seg_encoded_labels = onehot(seg_transformed_labels.astype(int), label_list)
-            #seg_encoded_grouped = encode_onehot(mapping, seg_reshaped, label_list, 'grouped', grp_mat)
-            
-            #dl = DiceLossLabels()
-            #tf_label_dice = dl.loss(unet_seg_encoded_labels,seg_encoded_labels)
-
-            label_dice_array = label_dice(unet_seg,seg_reshaped,label_list)
-            group_dice_array = group_dice(unet_seg,seg_reshaped,label_list,group_list)
-            thal_dice = thalamus_dice(unet_seg,seg_reshaped)
-            #print("label dice for " + subject + shell + " with " + seg_name +  " is: ", label_dice_array)
-            #print("group dice for " + subject + shell + " with " + seg_name +  " is: ", group_dice_array)
-            #print("thalamus dice for " + subject + shell + " with " + seg_name +  " is: ", thal_dice)
-            
-            avg_loss = 1.0 - (1/3)*(np.mean(label_dice_array) + np.mean(group_dice_array) + thal_dice)
-            print("Average loss for " + subject + shell + " with " + seg_name + "  is: ", avg_loss, "\n")
+        # unet_seg_path = os.path.join(fs_subject_dir,subject + shell,'results','thalNet_reduced_randV1_e050.seg.mgz')
+        # t1_path = os.path.join(fs_subject_dir,subject + shell, subject + '.t1.nii.gz')
+        # unet_seg, aff_unet, hd_unet = utils.load_volume(unet_seg_path,im_only=False)
+        #
+        #
+        #
+        # for seg_name in seg_list:
+        #     seg_path = os.path.join(fs_subject_dir,subject + shell,'segs',subject + seg_name + ".nii.gz")
+        #     seg, aff_seg, hd_seg = utils.load_volume(seg_path,im_only=False)
+        #     seg_reshaped = utils.resample_like(unet_seg, aff_unet, seg, aff_seg, method='nearest')
+        #
+        #     #seg_reshaped = torch.tensor(seg_reshaped.astype(int), device='cpu').long()
+        #     #unet_seg = torch.tensor(unet_seg.astype(int), device='cpu').long()
+        #     #mapping = torch.tensor(mapping.astype(int), device='cpu').long()
+        #     #unet_seg_encoded_labels = onehot(unet_seg_transformed_labels.astype(int),label_list)
+        #     #unet_seg_encoded_grouped = encode_onehot(mapping, unet_seg, label_list, 'grouped', grp_mat)
+        #     #seg_encoded_labels = onehot(seg_transformed_labels.astype(int), label_list)
+        #     #seg_encoded_grouped = encode_onehot(mapping, seg_reshaped, label_list, 'grouped', grp_mat)
+        #
+        #     #dl = DiceLossLabels()
+        #     #tf_label_dice = dl.loss(unet_seg_encoded_labels,seg_encoded_labels)
+        #
+        #     label_dice_array = label_dice(unet_seg,seg_reshaped,label_list)
+        #     group_dice_array = group_dice(unet_seg,seg_reshaped,label_list,group_list)
+        #     thal_dice = thalamus_dice(unet_seg,seg_reshaped)
+        #     #print("label dice for " + subject + shell + " with " + seg_name +  " is: ", label_dice_array)
+        #     #print("group dice for " + subject + shell + " with " + seg_name +  " is: ", group_dice_array)
+        #     #print("thalamus dice for " + subject + shell + " with " + seg_name +  " is: ", thal_dice)
+        #
+        #     avg_loss = 1.0 - (1/3)*(np.mean(label_dice_array) + np.mean(group_dice_array) + thal_dice)
+        #     print("Average loss for " + subject + shell + " with " + seg_name + "  is: ", avg_loss, "\n")
