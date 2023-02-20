@@ -14,11 +14,9 @@ from tensorflow.keras.utils import Progbar
 
 
 def validate_dti_segs(subject_list,
-                dataset,
                 path_label_list,
                 path_group_list,
                 model_file,
-                generator_mode='rgb',
                 unet_feat_count=24,
                 n_levels=5,
                 conv_size=3,
@@ -26,17 +24,17 @@ def validate_dti_segs(subject_list,
                 nb_conv_per_level=2,
                 activation='elu',
                 bounding_box_width=128,
-                seg_selection='grouped'):
+                seg_selection='grouped',
+                dice_version='grouped'):
 
-    assert (generator_mode == 'fa_v1') | (generator_mode == 'rgb'), \
-        'generator mode must be fa_v1 or rgb'
 
     # check type of one-hot encoding
     assert (seg_selection == 'single') or (seg_selection == 'combined') \
             or (seg_selection == 'mode') or (seg_selection == 'grouped') ,\
             'seg_selection must be single, combined, mode or grouped'
 
-    assert dataset in ('HCP','ADNI','template','validate','DRC') #will do for now
+    assert (dice_version == "grouped") | (dice_version == "individual"), \
+        'dice version must be grouped or individual'
 
     # Load label list
     label_list = np.load(path_label_list)
@@ -60,7 +58,7 @@ def validate_dti_segs(subject_list,
         grp_mat = None
 
     # Get loss calculator
-    if seg_selection == 'single':
+    if dice_version == 'individual':
         loss_calculator = metrics.DiceLoss()
     else:
         loss_calculator = metrics.DiceLossGrouped(group_seg, n_groups)

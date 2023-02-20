@@ -116,7 +116,6 @@ group_list = np.load(path_group_list)
 
 
 validate_dti_segs(subject_list,
-        dataset,
         path_label_list,
         path_group_list,
         model_file,
