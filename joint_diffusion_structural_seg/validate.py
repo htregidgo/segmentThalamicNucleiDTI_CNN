@@ -37,7 +37,7 @@ def validate_dti_segs(subject_list,
         'dice version must be grouped or individual'
 
     # Load label list
-    label_list = np.load(path_label_list)
+    label_list = np.load(path_label_list).astype(int)
     mapping = np.zeros(1 + label_list[-1], dtype='int')
     mapping[label_list] = np.arange(len(label_list))
     mapping = torch.tensor(mapping, device='cpu').long()
