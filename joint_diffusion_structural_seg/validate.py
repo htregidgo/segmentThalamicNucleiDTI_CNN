@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import tensorflow as tf
 import torch
 import glob
 
@@ -152,6 +153,8 @@ def validate_dti_segs(subject_list,
         else:
             target = encode_onehot(mapping, seg, label_list, seg_selection, grp_mat).float().detach().numpy()
             subj_loss = loss_calculator.loss(target[None,...],posteriors)
+
+            subj_loss = tf.math.reduce_mean(subj_loss)
 
         loss_vector[subj_no] = subj_loss
 
